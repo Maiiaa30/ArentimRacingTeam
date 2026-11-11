@@ -16,6 +16,7 @@
 </header>
 
 <div class="wrap">
+  <div id="boxAlert" class="box-alert">📻 BOX THIS LAP — swap to <span id="boxNext"></span></div>
   <!-- balanced hero grid: 3 stats -->
   <div class="grid big3">
     <div class="panel stat"><div class="label">Fuel laps left</div><div class="val" id="fuelLaps">—</div><div class="sub" id="fuelSub">&nbsp;</div></div>
@@ -53,6 +54,7 @@
       <div class="panel">
         <h2>Status</h2>
         <div class="kv"><span class="k">On track</span><span class="v" id="driver">—</span></div>
+        <div class="kv"><span class="k">Next driver</span><span class="v" id="nextDriver">—</span></div>
         <div class="kv"><span class="k">Stint time</span><span class="v" id="stintTime">—</span></div>
         <div class="kv"><span class="k">Laps left</span><span class="v" id="lapsLeft">—</span></div>
         <div class="kv"><span class="k">Stops left</span><span class="v" id="stops">—</span></div>
@@ -132,6 +134,12 @@ let currentPlan = Engine.generatePlan(cfg, wx);
 const $=id=>document.getElementById(id);
 const hms=s=>{s=Math.max(0,s|0);return `${(s/3600|0)}:${String(s/60%60|0).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`};
 const fmtLap=s=>{ if(s==null)return '—'; return s>=60?`${(s/60|0)}:${(s%60).toFixed(3).padStart(6,'0')}`:s.toFixed(3)+'s'; };
+let _audio;
+function beep(){ try{ _audio=_audio||new (window.AudioContext||window.webkitAudioContext)();
+  const o=_audio.createOscillator(), g=_audio.createGain(); o.type='square'; o.frequency.value=880;
+  o.connect(g); g.connect(_audio.destination);
+  g.gain.setValueAtTime(0.14,_audio.currentTime); g.gain.exponentialRampToValueAtTime(0.001,_audio.currentTime+0.45);
+  o.start(); o.stop(_audio.currentTime+0.45); }catch(e){} }
 
 function render(){
   const plan = currentPlan;
@@ -158,9 +166,16 @@ function render(){
   $('finish').innerHTML = `<span class="pill ${m.make_finish?'ok':'bad'}">${m.make_finish?'YES':'NO'}</span>`
     + (m.fuel_deficit>0?` <span class="note" style="margin:0">short ${m.fuel_deficit}L</span>`:'');
 
-  // driver + stint
+  // driver + stint + swap alarm
   $('driver').textContent = state.current_driver;
   $('stintTime').textContent = hms(state.stint_time_s);
+  const nextStint = plan.stints[activeIdx+1];
+  $('nextDriver').textContent = nextStint ? nextStint.driver : '—';
+  const boxOn = m.pit_in_laps <= 2;
+  $('boxAlert').classList.toggle('on', boxOn);
+  $('boxNext').textContent = nextStint ? nextStint.driver : 'same driver';
+  if(boxOn && !window._boxState) beep();   // beep once on entering the box window
+  window._boxState = boxOn;
   // race info strip
   $('pos').textContent = state.position ? 'P'+state.position : '—';
   $('gapA').textContent = state.gap_ahead_s==null ? '—' : '+'+state.gap_ahead_s.toFixed(1)+'s';
