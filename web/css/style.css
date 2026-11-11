@@ -531,6 +531,9 @@ label.fld{display:flex;justify-content:space-between;align-items:center;gap:10px
   border-radius:3px;padding:1px 5px;margin-left:6px;vertical-align:middle}
 .tag-finish{font-family:var(--mono);font-size:10px;font-weight:700;color:#0b0e13;background:#b06cff;
   border-radius:3px;padding:1px 5px;margin-left:6px;vertical-align:middle}
+.tag-stay{font-family:var(--mono);font-size:10px;font-weight:600;color:#9aa4b2;background:transparent;
+  border:1px solid #2a3340;border-radius:3px;padding:1px 5px;margin-left:6px;vertical-align:middle}
+tr.splash td{opacity:.72}
 #sectorBody{flex:0 0 auto}
 .sec-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px}
 .sec{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;

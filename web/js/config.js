@@ -7,14 +7,16 @@ window.RACE_CONFIG = {
   n_drivers: 4,
   // Francisco starts (index 0). Rui & Helder must never take stint 1.
   driver_names: ["Francisco Coelho", "Diogo Rodrigues", "Rui Garcia", "Helder Marques"],
-  // Agreed DEFAULT rotation (8-stint EQUAL-SEAT plan). Everyone drives the same —
-  // 2 stints each, ~equal minutes, because this is for fun + first 6h finish.
-  // Francisco bookends (starts + takes the flag: the cold-tyre start and the
-  // traffic-heavy finish, the two riskiest phases) but still only 2 stints.
-  // The other three split the calm middle 2 stints each. Rui/Helder never start.
-  // Balance: Francisco 2, Diogo 2, Rui 2, Helder 2.
-  driver_sequence: ["Francisco Coelho", "Diogo Rodrigues", "Rui Garcia", "Helder Marques",
-                    "Diogo Rodrigues", "Rui Garcia", "Helder Marques", "Francisco Coelho"],
+  // DEFAULT rotation: ENDURANCE / FEWER-SWAPS. VE forces a fuel splash every ~24
+  // laps (8 stints), but the driver only changes every SECOND stop — each driver
+  // runs a continuous ~90-min block (2 fuel stints, ~48 laps) and just splashes
+  // fuel in between without getting out. Driver changes: 3 (not 7).
+  // Blocks: Francisco (start) | Rui | Helder | Diogo (flag). Experienced bookend
+  // the risky start + finish; the newer pair get the calm middle. Rui/Helder never
+  // start. Each driver gets one long stint, ~equal seat time.
+  // (Pairs line up with the tyre new/stay pattern, so tyres change only on swaps.)
+  driver_sequence: ["Francisco Coelho", "Francisco Coelho", "Rui Garcia", "Rui Garcia",
+                    "Helder Marques", "Helder Marques", "Diogo Rodrigues", "Diogo Rodrigues"],
   cannot_start: ["Rui Garcia", "Helder Marques"],
 
   // --- car / pace :: MONZA · BMW M4 LMGT3 (real-data baseline) ---

@@ -1024,10 +1024,13 @@ function renderDefaultStrat(){
     byDriver[s.driver]=(byDriver[s.driver]||0)+Math.max(0,end-s.in_time_s);
   });
   const drv=Object.entries(byDriver).map(([n,t])=>`<span class="dchip">${n}: <b>${Math.round(t/60)}m</b></span>`).join('');
+  // driver changes = stops where the driver actually swaps (not a same-driver splash)
+  let swaps=0; p.stints.forEach((s,i)=>{ if(i>0 && s.driver!==p.stints[i-1].driver) swaps++; });
   $('defSummary').innerHTML =
     `<div class="def-kpis">`+
       `<div class="dk"><span>Stints</span><b>${p.stints.length}</b></div>`+
       `<div class="dk"><span>Pit stops</span><b>${p.stops}</b></div>`+
+      `<div class="dk"><span>Driver changes</span><b>${swaps}</b></div>`+
       `<div class="dk"><span>Tyre sets</span><b class="${p.tires_over_budget?'bad':''}">${Math.ceil(p.tires_used/4)} / ${Math.floor(DEFAULT_CFG.tire_budget/4)}</b></div>`+
       `<div class="dk"><span>Est. laps</span><b>${p.total_laps}</b></div>`+
       `<div class="dk"><span>Finish</span><b>${hms2(p.finish_time_s)}</b></div>`+
@@ -1038,9 +1041,11 @@ function renderDefaultStrat(){
     const dur=Math.max(0,end-s.in_time_s);
     const first = i===0 ? '<span class="tag-start">START</span>' : '';
     const last = i===p.stints.length-1 ? '<span class="tag-finish">TO FLAG</span>' : '';
-    rows+=`<tr>`+
+    const samePrev = i>0 && s.driver===p.stints[i-1].driver;
+    const stayTag = samePrev ? '<span class="tag-stay">stays in · splash</span>' : '';
+    rows+=`<tr${samePrev?' class="splash"':''}>`+
       `<td>${s.idx+1}</td>`+
-      `<td class="dn">${s.driver} ${first}${last}</td>`+
+      `<td class="dn">${s.driver} ${first}${last}${stayTag}</td>`+
       `<td>${s.in_lap}</td>`+
       `<td class="dim">${hms2(s.in_time_s)}</td>`+
       `<td><span class="tire ${s.tire_compound}">${s.tire_compound.toUpperCase()}</span></td>`+
