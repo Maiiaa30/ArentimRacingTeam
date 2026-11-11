@@ -90,17 +90,81 @@ def read_state(info):
     except Exception:
         wheels = []
 
+    # --- global session scoring (temps, flags, clock, rival field) ---
+    sinfo = None
+    try:
+        sinfo = info.Rf2Scor.mScoringInfo
+    except Exception:
+        sinfo = None
+
+    track_temp = g(sinfo, "mTrackTemp") if sinfo is not None else None
+    air_temp = g(sinfo, "mAmbientTemp") if sinfo is not None else None
+    cur_et = g(sinfo, "mCurrentET") if sinfo is not None else None
+    end_et = g(sinfo, "mEndET") if sinfo is not None else None
+    session_remaining = (end_et - cur_et) if (cur_et is not None and end_et and end_et > 0) else None
+
+    # flag: whole-course yellow state -> green/yellow/fcy; checkered at session end.
+    # rF2 mYellowFlagState: 0 none, 1 pending, 2 pitClosed, 3 pitLeadLap, 4 pitOpen,
+    # 5 lastLap, 6 resume, 7 raceHalt. mGamePhase 5=FullCourseYellow, 8=Checkered.
+    flag = "green"
+    phase = g(sinfo, "mGamePhase") if sinfo is not None else None
+    yflag = g(sinfo, "mYellowFlagState") if sinfo is not None else None
+    sflags = g(scor, "mSectorFlag") if scor is not None else None
+    if phase == 8:
+        flag = "checkered"
+    elif phase == 5 or (yflag not in (None, 0)):
+        flag = "fcy"
+    elif sflags and any(f for f in list(sflags)):
+        flag = "yellow"
+
+    # sector splits for our last lap (cumulative -> per-sector)
+    ls1 = g(scor, "mLastSector1")
+    ls2 = g(scor, "mLastSector2")
+    sectors = None
+    if ls1 and ls1 > 0 and ls2 and ls2 > 0 and last_lap and last_lap > 0:
+        sectors = {"s1": round(ls1, 3), "s2": round(ls2 - ls1, 3), "s3": round(last_lap - ls2, 3)}
+
+    # rival field: iterate every scored vehicle (best-effort; names vary by plugin)
+    rivals = []
+    try:
+        vehicles = info.Rf2Scor.mVehicles
+        n = g(sinfo, "mNumVehicles", len(vehicles)) if sinfo is not None else len(vehicles)
+        my_id = g(scor, "mID")
+        for v in list(vehicles)[: max(0, int(n or 0))]:
+            nm = g(v, "mDriverName") or b""
+            nm = nm.decode("utf-8", "ignore") if isinstance(nm, (bytes, bytearray)) else nm
+            vll = g(v, "mLastLapTime")
+            rivals.append({
+                "pos": g(v, "mPlace"),
+                "name": nm,
+                "cls": "GT3",
+                "gap_s": g(v, "mTimeBehindNext"),
+                "last_lap_s": None if not vll or vll < 0 else round(vll, 3),
+                "laps": g(v, "mTotalLaps"),
+                "in_pits": bool(g(v, "mInPits", 0)),
+                "is_us": (g(v, "mID") == my_id) if my_id is not None else False,
+            })
+    except Exception:
+        rivals = []
+
     return {
         "fuel_now": fuel,
         "last_lap_s": None if not last_lap or last_lap < 0 else last_lap,
         "best_lap_s": None if not best_lap or best_lap < 0 else best_lap,
         "laps_done": total_laps,
         "position": place,
+        "cls_position": place,
         "in_pits": bool(in_pits) if in_pits is not None else None,
         "current_driver": (g(scor, "mDriverName") or b"").decode("utf-8", "ignore")
                            if isinstance(g(scor, "mDriverName"), (bytes, bytearray))
                            else g(scor, "mDriverName"),
         "wheels": wheels or None,
+        "flag": flag,
+        "track_temp": track_temp,
+        "air_temp": air_temp,
+        "session_remaining_s": session_remaining,
+        "sectors": sectors,
+        "rivals": rivals or None,
         "_dents": list(dents) if dents is not None else None,
         "updated_at": _now_iso(),
     }
@@ -128,6 +192,27 @@ def demo_state(tick):
         "tire_wear_pct": min(100, (tick % 96)), "laps_on_tires": (tick % 96) // 4,
         "aero_pct": 0, "body_pct": 0, "susp_pct": 0, "tyres_pct": min(100, tick % 60),
         "repair_s": 0, "penalties": 0,
+        # real-telemetry fields (demo values)
+        "flag": "fcy" if (tick % 180) > 170 else ("yellow" if (tick % 90) > 85 else "green"),
+        "in_pits": (tick % 96) in (0, 1),
+        "session_remaining_s": max(0, 21600 - tick * 24),
+        "track_temp": round(30 - (6 if wet else 0) + math.sin(tick / 40) * 2, 1),
+        "air_temp": round(20 - (3 if wet else 0) + math.sin(tick / 60), 1),
+        "sectors": {
+            "s1": round((95.0 * (1.12 if wet else 1.0)) * 0.32, 3),
+            "s2": round((95.0 * (1.12 if wet else 1.0)) * 0.40, 3),
+            "s3": round((95.0 * (1.12 if wet else 1.0)) * 0.28, 3),
+        },
+        "rivals": [
+            {"pos": p, "name": nm, "cls": "GT3",
+             "gap_s": 0 if p == 3 else round((p - 3) * 4.5, 1),
+             "last_lap_s": round(95.0 + (p - 3) * 0.3, 3),
+             "laps": lap - (1 if p > 5 else 0),
+             "in_pits": False, "is_us": p == 3}
+            for p, nm in enumerate(
+                ["#7 Toyota", "#51 Ferrari", "#30 ARENTIM", "#6 Porsche",
+                 "#2 Cadillac", "#93 Peugeot", "#15 BMW", "#35 Alpine"], start=1)
+        ],
         "updated_at": _now_iso(),
     }
 
