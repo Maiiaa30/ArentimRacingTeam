@@ -79,6 +79,11 @@ window.RACE_CONFIG = {
 // Real driver names — editable from the dashboard Setup panel.
 window.DRIVERS = ["Francisco Coelho", "Diogo Rodrigues", "Rui Garcia", "Helder Marques"];
 
+// Pristine SHIPPED baseline — snapshot BEFORE any localStorage override is applied.
+// The "Default strat" view renders from this so a stale Setup override on one
+// browser can never hide the real agreed pre-race plan.
+window.RACE_CONFIG_BASE = JSON.parse(JSON.stringify(window.RACE_CONFIG));
+
 // Apply saved overrides from the Setup panel (localStorage) over the defaults above.
 // This is how real practice values + driver names get in without editing code.
 window.CONFIG_KEY = 'arentim_pitwall_config';

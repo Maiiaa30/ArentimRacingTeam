@@ -247,8 +247,11 @@ let state = { fuel_now:null, fuel_capacity:null, laps_done:0, stint_lap:0, avg_l
 // live plan — events regenerate it; render reads it
 let currentPlan = Engine.generatePlan(cfg, wx);
 // Fixed baseline (the "default strategy"): pristine dry-weather plan, never
-// regenerated — the reference the live plan is compared against.
-const DEFAULT_PLAN = JSON.parse(JSON.stringify(Engine.generatePlan(cfg,
+// regenerated — the reference the live plan is compared against. Built from the
+// SHIPPED config (window.RACE_CONFIG_BASE), NOT the live cfg, so a saved Setup
+// override on this browser can't mask the agreed pre-race plan.
+const DEFAULT_CFG = window.RACE_CONFIG_BASE || cfg;
+const DEFAULT_PLAN = JSON.parse(JSON.stringify(Engine.generatePlan(DEFAULT_CFG,
   [{start_s:0, condition:'dry', wetness:0}])));
 
 const $=id=>document.getElementById(id);
@@ -1025,7 +1028,7 @@ function renderDefaultStrat(){
     `<div class="def-kpis">`+
       `<div class="dk"><span>Stints</span><b>${p.stints.length}</b></div>`+
       `<div class="dk"><span>Pit stops</span><b>${p.stops}</b></div>`+
-      `<div class="dk"><span>Tyre sets</span><b class="${p.tires_over_budget?'bad':''}">${Math.ceil(p.tires_used/4)} / ${Math.floor(cfg.tire_budget/4)}</b></div>`+
+      `<div class="dk"><span>Tyre sets</span><b class="${p.tires_over_budget?'bad':''}">${Math.ceil(p.tires_used/4)} / ${Math.floor(DEFAULT_CFG.tire_budget/4)}</b></div>`+
       `<div class="dk"><span>Est. laps</span><b>${p.total_laps}</b></div>`+
       `<div class="dk"><span>Finish</span><b>${hms2(p.finish_time_s)}</b></div>`+
     `</div><div class="def-drivers">${drv}</div>`;
