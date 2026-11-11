@@ -76,11 +76,21 @@
           <button class="alert" onclick="ev('forced_pit')">Forced Pit</button>
           <button onclick="ev('pace_change')">Pace Change</button>
           <button onclick="openWif()">What-if</button>
+          <button onclick="openFuel()">Fuel save</button>
         </div>
         <p class="note">Locks past stints, regenerates the rest of the race.</p>
         <div id="evLog" class="ev-log"></div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- fuel-save modal -->
+<div class="modal-bg" id="fuelModal" onclick="if(event.target===this)closeFuel()">
+  <div class="modal">
+    <button class="x" onclick="closeFuel()">✕</button>
+    <h2>Fuel save</h2>
+    <div id="fuelBody"></div>
   </div>
 </div>
 
@@ -277,6 +287,47 @@ function logEvent(reason){
   li.innerHTML = `<span class="ev-t">L${state.laps_done}</span> ${reason} → ${futureStops} stops left · `+
     `finish ${m.make_finish?'<span class="ok">OK</span>':'<span class="bad">NO</span>'}`;
   const log=$('evLog'); log.insertBefore(li, log.firstChild);
+}
+
+// ---- fuel-save calculator ----
+function openFuel(){ renderFuel(); $('fuelModal').classList.add('open'); }
+function closeFuel(){ $('fuelModal').classList.remove('open'); }
+function renderFuel(){
+  const fpl = cfg.fuel_per_lap;
+  const lpt = Math.floor(cfg.tank_cap / fpl) - cfg.fuel_margin_laps;
+  const lapsFuelNow = state.fuel_now / fpl;
+  const R = currentPlan.total_laps - state.laps_done;
+  const futureStops = currentPlan.stints.filter(s=> s.in_lap > state.laps_done).length;
+  const row=(k,v)=>`<div class="dmg-row"><span>${k}</span><span class="dv">${v}</span></div>`;
+
+  // extend current fuel by +1 lap
+  const extTarget = state.fuel_now / (Math.floor(lapsFuelNow)+1);
+  const extSave = fpl - extTarget, extPct = extSave/fpl*100;
+  // drop one stop over the remainder (fewer stops => longer stints)
+  let dropBlock = `<p class="note">No remaining stops to drop.</p>`;
+  if(futureStops > 0){
+    const lapsPerStint = R / futureStops;               // stints if we keep current stop count
+    const dropTarget = cfg.tank_cap / (lapsPerStint + cfg.fuel_margin_laps); // need this fpl for 1 fewer stop
+    const dropSave = fpl - dropTarget, dropPct = dropSave/fpl*100;
+    const feasible = dropPct <= 6 && dropSave > 0;      // lift+coast realistically ~<=6%
+    dropBlock =
+      row('Target fuel/lap', dropTarget.toFixed(2)+' L') +
+      row('Save needed', (dropSave>0?dropSave.toFixed(2):'0.00')+' L/lap · '+(dropPct>0?dropPct.toFixed(1):'0')+'%') +
+      `<div class="rec ${feasible?'ok':'bad'}" style="margin-top:12px"><b>${feasible?'FEASIBLE':'TOO MUCH'}</b> — `+
+        `${feasible?'lift-and-coast can drop a stop':'more than lift+coast can save; keep the stop'}</div>`;
+  }
+
+  $('fuelBody').innerHTML =
+    `<div class="sub-h">Now</div><div class="dmg-list">`+
+      row('Fuel/lap', fpl.toFixed(2)+' L') + row('Laps per tank', lpt) +
+      row('Fuel in tank', state.fuel_now.toFixed(1)+' L') + row('Fuel laps left', lapsFuelNow.toFixed(1)) +
+    `</div>`+
+    `<div class="sub-h" style="margin-top:16px">Extend this stint +1 lap</div><div class="dmg-list">`+
+      row('Target fuel/lap', extTarget.toFixed(2)+' L') +
+      row('Save needed', (extSave>0?extSave.toFixed(2):'0.00')+' L/lap · '+(extPct>0?extPct.toFixed(1):'0')+'%') +
+    `</div>`+
+    `<div class="sub-h" style="margin-top:16px">Drop one stop (${futureStops}→${Math.max(0,futureStops-1)})</div><div class="dmg-list">`+
+      dropBlock + `</div>`;
 }
 
 // ---- what-if sandbox (non-destructive) ----
