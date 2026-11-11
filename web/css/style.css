@@ -134,6 +134,25 @@ tr.active{background:rgba(225,6,0,.08)} tr.active td:first-child{border-left:2px
 .rec.bad{color:#ff6a60;border-color:rgba(255,59,48,.5);background:rgba(255,59,48,.1)}
 .rec.warn{color:#ffce45;border-color:rgba(242,182,0,.5);background:rgba(242,182,0,.08)}
 .rec.ok{color:#5fe08a;border-color:rgba(46,201,107,.5);background:rgba(46,201,107,.08)}
+/* damage list + tyres (blackrack-style) */
+.sub-h{font-size:11px;letter-spacing:2px;color:var(--mut);text-transform:uppercase;margin:0 0 10px}
+.dmg-cols{display:grid;grid-template-columns:1fr 1.15fr;gap:20px;margin-top:4px}
+@media(max-width:480px){.dmg-cols{grid-template-columns:1fr;gap:16px}}
+.dmg-list{font-family:var(--mono)}
+.dmg-row{display:flex;justify-content:space-between;align-items:center;
+  padding:9px 2px;border-bottom:1px solid var(--line);font-size:16px}
+.dmg-row>span:first-child{font-weight:700}
+.dmg-row .dv{font-weight:700;font-variant-numeric:tabular-nums}
+.dmg-row .dv.ok{color:var(--txt)} .dmg-row .dv.warn{color:var(--warn)} .dmg-row .dv.bad{color:var(--bad)}
+.dmg-row .dv.rep{color:var(--accent)}
+.tyre-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tyre{display:flex;align-items:center;gap:10px;background:#0d131b;border:1px solid var(--line);
+  border-radius:9px;padding:9px 10px}
+.tyre .tbar{width:7px;align-self:stretch;min-height:34px;border-radius:4px;flex:0 0 auto}
+.tyre .tbar.ok{background:var(--ok)} .tyre .tbar.warn{background:var(--warn)} .tyre .tbar.bad{background:var(--bad)}
+.tyre .tn{font-family:var(--mono);font-weight:700;font-size:13px;margin-bottom:2px}
+.tyre .tv{font-family:var(--mono);font-size:10.5px;color:var(--mut);line-height:1.4}
+.dmg-meta{margin-top:16px;font-family:var(--mono);font-size:12px;color:var(--dim)}
 input,select{background:#0a0d12;color:var(--txt);border:1px solid var(--line2);
   border-radius:7px;padding:8px 10px;font-size:13px;font-family:var(--mono)}
 label.fld{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:8px 0}

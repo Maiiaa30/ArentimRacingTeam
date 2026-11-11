@@ -36,13 +36,11 @@ window.RACE_CONFIG = {
   ve_max: 100,                 // Virtual Energy budget (%) — only if energy_mode "ve"
   ve_per_lap: 1.6,             // VE % used per lap — validate in-game
 
-  // --- damage / repair ---  (times = fallback estimates; read from LMU engineer menu if exposed)
+  // --- damage / repair ---  LMU reports Aero/Body/Susp/Tyres % + a repair-time estimate
   damage: {
-    repair_body_s: 30,         // body-only repair time (PLACEHOLDER — validate in-game)
-    repair_all_s: 120,         // full repair incl. suspension/aero (cap ~180s)
-    critical_severity: 2,      // dent zone value that counts as severe
-    // dent zone index -> body location (community convention; VALIDATE by hitting corners)
-    zone_labels: ["front","front-right","right","rear-right","rear","rear-left","left","front-left"]
+    severe_pct: 20,            // category % that counts as severe (REPAIR)
+    susp_critical: 25,         // suspension % that forces a pit (REPAIR_NOW)
+    repair_fallback_s: 30      // used only if LMU repair_s is missing
   }
 };
 

@@ -84,8 +84,7 @@
 <div class="modal-bg" id="dmgModal" onclick="if(event.target===this)closeDamage()">
   <div class="modal">
     <button class="x" onclick="closeDamage()">✕</button>
-    <h2>Damage detail</h2>
-    <div class="carwrap"><div id="carSvg"></div></div>
+    <h2>Car condition</h2>
     <div id="dmgDetails"></div>
     <div id="dmgRec" class="rec"></div>
   </div>
@@ -106,12 +105,12 @@ let state = { fuel_now:cfg.tank_cap, laps_done:0, stint_lap:0, avg_lap_live:cfg.
   position:4, gap_ahead_s:3.2, gap_behind_s:5.8,
   last_lap_s:95.42, best_lap_s:94.18, last_pit_lap:null,
   penalties:0, tire_wear_pct:18, laps_on_tires:13,
-  // damage detail: dent[8] in zone_labels order, wheels[4] = FL,FR,RL,RR
-  dent:[1,2,0,0,0,0,0,0],
-  wheels:[ {wear:0.18,brakeTemp:410,flat:false,detached:false},
-           {wear:0.22,brakeTemp:520,flat:false,detached:false},
-           {wear:0.15,brakeTemp:395,flat:false,detached:false},
-           {wear:0.17,brakeTemp:405,flat:false,detached:false} ],
+  // damage (LMU categories %) + repair estimate (s) + per-wheel; wheels = FL,FR,RL,RR
+  aero_pct:8, body_pct:11, susp_pct:0, tyres_pct:32, repair_s:6,
+  wheels:[ {wear:0.26,brakeTemp:412,temp:86,press:172,flat:false,detached:false},
+           {wear:0.32,brakeTemp:436,temp:91,press:173,flat:false,detached:false},
+           {wear:0.23,brakeTemp:355,temp:82,press:168,flat:false,detached:false},
+           {wear:0.28,brakeTemp:371,temp:88,press:169,flat:false,detached:false} ],
   last_impact_mag:14.2, last_impact_ago_s:35, accum_impact:40 };
 
 const $=id=>document.getElementById(id);
@@ -150,8 +149,8 @@ function render(){
   $('lastPit').textContent = state.last_pit_lap==null ? '—' : state.last_pit_lap;
   const dsum = Engine.damageSummary(cfg, state);
   const de=$('damage');
-  de.textContent = dsum.mandatory ? 'PIT!' : (dsum.body_pct>0 ? dsum.body_pct+'%' : 'OK');
-  de.className='v '+(dsum.mandatory||dsum.severe ? 'bad' : dsum.body_pct===0 ? 'ok' : 'warn');
+  de.textContent = dsum.mandatory ? 'PIT!' : (dsum.worst>0 ? dsum.worst+'%' : 'OK');
+  de.className='v '+(dsum.mandatory||dsum.severe ? 'bad' : dsum.worst===0 ? 'ok' : 'warn');
   const pe=$('pen'); pe.textContent = state.penalties>0 ? state.penalties : 'none';
   pe.className='v '+(state.penalties>0?'bad':'ok');
   // tires extra
@@ -187,39 +186,29 @@ function renderDamage(){
   const pittingAnyway = (Engine.liveMetrics(cfg,{...state,remaining_stops:plan.stops},plan,wx).pit_in_laps <= 1);
   const rec = Engine.repairDecision(cfg, state, penalty, lapsRem, {pitting_anyway:pittingAnyway});
 
-  // car diagram: real top-view silhouette; 8 body parts light up by dent severity
-  const sevN=['none','some','heavy'];
-  const L=(cfg.damage&&cfg.damage.zone_labels)||[];
-  const sevFill=s=> s>=2?'#ff3b30' : s>=1?'#f2b600' : '#33404f'; // intact = panel trim grey
-  const z=(i,x,y,w,h,rx)=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" `+
-    `fill="${sevFill(state.dent[i])}" stroke="#10151c" stroke-width="1.5">`+
-    `<title>${L[i]||('zone '+i)}: ${sevN[state.dent[i]]||state.dent[i]}</title></rect>`;
-  const wFill=w=> (w.flat||w.detached)?'#ff3b30' : w.wear>=0.85?'#ff3b30' : w.wear>=0.6?'#f2b600' : '#15191f';
-  const tires=[[18,84],[164,84],[18,248],[164,248]].map(([x,y],i)=>
-    `<rect x="${x}" y="${y}" width="18" height="48" rx="6" fill="${wFill(state.wheels[i]||{})}" stroke="#000" stroke-width="2"/>`).join('');
-  const body=`<path d="M100 16 C121 16 133 28 137 52 L151 80 C159 88 161 98 161 112 L161 250 C161 277 157 297 147 313 L120 331 L80 331 L53 313 C43 297 39 277 39 250 L39 112 C39 98 41 88 49 80 L63 52 C67 28 79 16 100 16 Z" fill="#2b3443" stroke="#3a4656" stroke-width="2"/>`;
-  const glass=`<path d="M82 122 L118 122 C123 122 125 125 125 130 L123 210 C123 218 119 222 111 222 L89 222 C81 222 77 218 77 210 L75 130 C75 125 77 122 82 122 Z" fill="#0e1218" stroke="#1a2029"/>`;
-  const zones =
-    z(0,64,6,72,16,8)+      // 0 front splitter
-    z(7,40,80,26,54,9)+     // 7 front-left fender
-    z(1,134,80,26,54,9)+    // 1 front-right fender
-    z(6,40,150,18,78,6)+    // 6 left side
-    z(2,142,150,18,78,6)+   // 2 right side
-    z(5,40,236,26,56,9)+    // 5 rear-left
-    z(3,134,236,26,56,9)+   // 3 rear-right
-    z(4,52,332,96,16,8);    // 4 rear wing
-  $('carSvg').innerHTML=`<svg viewBox="0 0 200 360" width="178" height="320">${tires}${body}${glass}${zones}</svg>`;
+  // LMU-style: damage = color-coded list (Aero/Body/Susp/Tyres/Repair) + tyre grid. No car drawing.
+  const pc=v=> v>=(cfg.damage.severe_pct??20) ? 'bad' : v>0 ? 'warn' : 'ok';
+  const drow=(k,v,unit='%')=>`<div class="dmg-row"><span>${k}</span><span class="dv ${v==='--'?'':pc(v)}">${v}${v==='--'?'':unit}</span></div>`;
+  const c=dsum.cats;
+  const dmgList=`<div class="dmg-list">`+
+    drow('Aero',c.aero)+drow('Body',c.body)+drow('Susp.',c.susp)+drow('Tyres',c.tyres)+
+    `<div class="dmg-row"><span>Repair</span><span class="dv rep">${state.repair_s}s</span></div></div>`;
 
   const wn=['FL','FR','RL','RR'];
-  const wt=state.wheels.map((w,i)=>`<div class="kv"><span class="k">${wn[i]}</span><span class="v">`+
-    `wear ${Math.round(w.wear*100)}% · ${Math.round(w.brakeTemp)}°C`+
-    `${w.flat?' · FLAT':''}${w.detached?' · OFF':''}</span></div>`).join('');
+  const tcol=w=> (w.flat||w.detached)?'bad' : w.wear>=0.6?'warn' : 'ok';
+  const tyres=`<div class="tyre-grid">`+state.wheels.map((w,i)=>
+    `<div class="tyre"><span class="tbar ${tcol(w)}"></span><div><div class="tn">${wn[i]}`+
+    `${w.flat?' · FLAT':''}${w.detached?' · OFF':''}</div>`+
+    `<div class="tv">${Math.round(w.wear*100)}% wear · ${Math.round(w.brakeTemp)}°C`+
+    `${w.temp?' · '+Math.round(w.temp)+'°':''}${w.press?' · '+Math.round(w.press)+'kPa':''}</div></div></div>`).join('')+`</div>`;
+
   $('dmgDetails').innerHTML=
-    `<div class="kv"><span class="k">Body damage</span><span class="v">${dsum.body_pct}%</span></div>`+
-    `<div class="kv"><span class="k">Last impact</span><span class="v">${state.last_impact_mag} · ${state.last_impact_ago_s}s ago</span></div>`+
-    `<div class="kv"><span class="k">Accumulated hits</span><span class="v">${state.accum_impact}</span></div>`+
-    `<div class="kv"><span class="k">Measured penalty</span><span class="v">${penalty.toFixed(2)}s/lap</span></div>`+
-    wt;
+    `<div class="dmg-cols">`+
+      `<div><div class="sub-h">Damage</div>${dmgList}</div>`+
+      `<div><div class="sub-h">Tyres</div>${tyres}</div>`+
+    `</div>`+
+    `<div class="dmg-meta">last impact ${state.last_impact_mag} · ${state.last_impact_ago_s}s ago `+
+      `· measured penalty <b>${penalty.toFixed(2)}s/lap</b></div>`;
 
   const map={REPAIR_NOW:['bad','⚠ PIT NOW — mandatory'],REPAIR:['warn','REPAIR recommended'],STAY_OUT:['ok','STAY OUT']};
   const [cls,label]=map[rec.recommendation];

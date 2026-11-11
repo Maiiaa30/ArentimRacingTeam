@@ -155,35 +155,31 @@ const Engine = (() => {
     return regenerate(c2, w2, s2, lockedStints);
   }
 
-  // ---- damage: summary + repair decision ----
-  // dmg = { dent:[8 ints 0..2], wheels:[{wear,flat,detached,brakeTemp} x4],
-  //         repair_time_body_s, repair_time_all_s }  (times from LMU engineer menu if exposed, else cfg)
+  // ---- damage: summary + repair decision (LMU categories) ----
+  // dmg = { aero_pct, body_pct, susp_pct, tyres_pct, repair_s (LMU estimate),
+  //         wheels:[{wear,brakeTemp,temp,press,flat,detached} x4] }
   function damageSummary(cfg, dmg) {
-    const dent = dmg.dent || [0,0,0,0,0,0,0,0];
-    const dentSum = dent.reduce((a,b)=>a+b, 0);               // 0..16
-    const body_pct = Math.round(dentSum / 16 * 100);
+    const cats = { aero:dmg.aero_pct||0, body:dmg.body_pct||0, susp:dmg.susp_pct||0, tyres:dmg.tyres_pct||0 };
+    const worst = Math.max(cats.aero, cats.body, cats.susp, cats.tyres);
     const wheels = dmg.wheels || [];
-    const flats = wheels.filter(w => w.flat).length;
-    const detached = wheels.filter(w => w.detached).length;
-    const worstWear = Math.max(0, ...wheels.map(w => w.wear || 0));
-    const mandatory = flats > 0 || detached > 0;              // puncture / wheel off = pit now
-    const severe = dent.some(z => z >= (cfg.damage?.critical_severity ?? 2));
-    return { body_pct, dentSum, flats, detached, worstWear, mandatory, severe };
+    const flats = wheels.filter(w => w.flat || w.detached).length;
+    const mandatory = flats > 0 || cats.susp >= (cfg.damage?.susp_critical ?? 25);
+    const severe = worst >= (cfg.damage?.severe_pct ?? 20);
+    return { cats, worst, flats, mandatory, severe };
   }
 
   // Auto-recommend repair. penalty_s = MEASURED lap-time loss (avg_after - baseline), per lap.
-  // opts = { pitting_anyway:bool, repair_time_s:num }
+  // opts = { pitting_anyway:bool, repair_time_s:num }  (repair time comes from LMU: dmg.repair_s)
   function repairDecision(cfg, dmg, penalty_s, lapsRemaining, opts) {
     opts = opts || {};
     const sum = damageSummary(cfg, dmg);
     const repairT = opts.repair_time_s != null ? opts.repair_time_s
-                   : (sum.severe ? (cfg.damage?.repair_all_s ?? 120) : (cfg.damage?.repair_body_s ?? 30));
+                   : (dmg.repair_s != null ? dmg.repair_s : (cfg.damage?.repair_fallback_s ?? 30));
     const stayOutCost = Math.max(0, (penalty_s || 0) * (lapsRemaining || 0));
-    // if already pitting, only the repair time is "extra"; if not, add a full pit loss
     const repairCost = opts.pitting_anyway ? repairT : (cfg.pit_loss_s + repairT);
     let rec;
-    if (sum.mandatory) rec = "REPAIR_NOW";          // flat / detached — forced
-    else if (sum.severe) rec = "REPAIR";            // risk of escalation / DNF
+    if (sum.mandatory) rec = "REPAIR_NOW";
+    else if (sum.severe) rec = "REPAIR";
     else rec = repairCost < stayOutCost ? "REPAIR" : "STAY_OUT";
     return {
       recommendation: rec,
