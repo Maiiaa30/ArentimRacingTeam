@@ -49,8 +49,20 @@ window.RACE_CONFIG = {
   access_passcode: ""          // set a shared word to require it on load
 };
 
-// Real driver names — swap these in (you said you'll tell me how later).
+// Real driver names — editable from the dashboard Setup panel.
 window.DRIVERS = ["D1", "D2", "D3", "D4"];
+
+// Apply saved overrides from the Setup panel (localStorage) over the defaults above.
+// This is how real practice values + driver names get in without editing code.
+window.CONFIG_KEY = 'arentim_pitwall_config';
+try {
+  const ov = JSON.parse(localStorage.getItem(window.CONFIG_KEY) || 'null');
+  if (ov && typeof ov === 'object') {
+    if (ov.tire_life_laps) { Object.assign(window.RACE_CONFIG.tire_life_laps, ov.tire_life_laps); delete ov.tire_life_laps; }
+    Object.assign(window.RACE_CONFIG, ov);
+    if (Array.isArray(ov.driver_names)) window.DRIVERS = ov.driver_names.slice();
+  }
+} catch (e) {}
 
 // Weather timeline — pulled from game later; manual for now.
 // Each segment: { start_s, condition: "dry"|"wet", wetness: 0..1 }

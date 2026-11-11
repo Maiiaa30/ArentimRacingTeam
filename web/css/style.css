@@ -158,6 +158,15 @@ tr.active{background:rgba(225,6,0,.08)} tr.active td:first-child{border-left:2px
   background:#1a2432;overflow:hidden;margin-right:7px}
 .loadbar i{display:block;height:100%;background:var(--accent)}
 .laptbl .ls{font-size:12px;color:var(--mut)}
+.chip.btn{cursor:pointer;color:var(--txt);font-family:inherit}
+.chip.btn:hover{border-color:var(--accent);color:#fff}
+.setup-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;margin-top:6px}
+@media(max-width:560px){.setup-grid{grid-template-columns:1fr}}
+.setup-grid label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mut)}
+.setup-grid input,.setup-grid select{padding:8px 10px;border-radius:8px;border:1px solid var(--line2);
+  background:#0a1016;color:var(--txt);font-size:14px;font-family:var(--mono)}
+.setup-grid input:focus,.setup-grid select:focus{outline:none;border-color:var(--accent)}
+.btns button.go{background:var(--accent);color:#fff;font-weight:700}
 .modal .x{position:absolute;top:12px;right:14px;cursor:pointer;color:var(--mut);
   font-size:18px;background:none;border:0;padding:4px 8px}
 .modal .x:hover{color:var(--txt)}

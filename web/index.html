@@ -14,6 +14,7 @@
   <span class="chip clock" id="clock">--:--:--</span>
   <span class="chip wet" id="wx">DRY</span>
   <span class="chip tgt" id="target">fewest stops</span>
+  <button class="chip btn" onclick="openSetup()" title="Race setup — enter real values">⚙ Setup</button>
 </header>
 
 <div class="wrap">
@@ -122,6 +123,20 @@
     <h2>Car condition</h2>
     <div id="dmgDetails"></div>
     <div id="dmgRec" class="rec"></div>
+  </div>
+</div>
+
+<!-- setup / config modal -->
+<div class="modal-bg" id="setupModal" onclick="if(event.target===this)closeSetup()">
+  <div class="modal wide">
+    <button class="x" onclick="closeSetup()">✕</button>
+    <h2>Race setup</h2>
+    <p class="note" style="margin-top:0">Enter real values from practice. Saved in this browser; the plan regenerates on save.</p>
+    <div id="setupBody" class="setup-grid"></div>
+    <div class="btns" style="margin-top:16px">
+      <button class="go" onclick="saveSetup()">Save &amp; regenerate</button>
+      <button onclick="resetSetup()">Reset to defaults</button>
+    </div>
   </div>
 </div>
 
@@ -556,6 +571,63 @@ function renderDrivers(){
 }
 function openDrivers(){ renderDrivers(); $('drvModal').classList.add('open'); }
 function closeDrivers(){ $('drvModal').classList.remove('open'); }
+
+// ---- race setup panel (edit config from the UI, persist to localStorage) ----
+const _esc = s => String(s).replace(/"/g,'&quot;').replace(/</g,'&lt;');
+function renderSetup(){
+  const tl = cfg.tire_life_laps;
+  const dn = (cfg.driver_names && cfg.driver_names.length) ? cfg.driver_names : window.DRIVERS;
+  const num = (id,val,step)=>`<label>${id.label}<input type="number" id="su_${id.k}" value="${val}" step="${step||'any'}"></label>`;
+  $('setupBody').innerHTML =
+    num({k:'duration_h',label:'Race length (h)'}, (cfg.duration_s/3600), 0.5) +
+    num({k:'avg_lap_s',label:'Avg lap (s)'}, cfg.avg_lap_s, 0.1) +
+    num({k:'fuel_per_lap',label:'Fuel / lap (L)'}, cfg.fuel_per_lap, 0.1) +
+    num({k:'tank_cap',label:'Tank (L)'}, cfg.tank_cap, 1) +
+    num({k:'fuel_margin_laps',label:'Fuel margin (laps)'}, cfg.fuel_margin_laps, 1) +
+    num({k:'tire_budget',label:'Tyre budget'}, cfg.tire_budget, 1) +
+    num({k:'pit_loss_s',label:'Pit loss (s)'}, cfg.pit_loss_s, 1) +
+    num({k:'wet_lap_factor',label:'Wet lap factor'}, cfg.wet_lap_factor, 0.01) +
+    num({k:'tl_soft',label:'Tyre life — soft'}, tl.soft, 1) +
+    num({k:'tl_med',label:'Tyre life — med'}, tl.med, 1) +
+    num({k:'tl_hard',label:'Tyre life — hard'}, tl.hard, 1) +
+    num({k:'tl_wet',label:'Tyre life — wet'}, tl.wet, 1) +
+    `<label>Optimize<select id="su_optimize_target">`+
+      ['fewest_stops','fastest','safest'].map(o=>`<option ${cfg.optimize_target===o?'selected':''}>${o}</option>`).join('')+
+    `</select></label>`+
+    `<label>Access passcode<input type="text" id="su_access" value="${_esc(cfg.access_passcode||'')}"></label>`+
+    dn.map((n,i)=>`<label>Driver ${i+1}<input type="text" id="su_drv${i}" value="${_esc(n)}"></label>`).join('');
+}
+function saveSetup(){
+  const g = id => $('su_'+id);
+  const names = [0,1,2,3].map(i => (g('drv'+i).value.trim() || ('D'+(i+1))));
+  const ov = {
+    duration_s: Math.round((+g('duration_h').value || 6) * 3600),
+    avg_lap_s: +g('avg_lap_s').value, fuel_per_lap: +g('fuel_per_lap').value,
+    tank_cap: +g('tank_cap').value, fuel_margin_laps: +g('fuel_margin_laps').value,
+    tire_budget: +g('tire_budget').value, pit_loss_s: +g('pit_loss_s').value,
+    wet_lap_factor: +g('wet_lap_factor').value,
+    tire_life_laps: { soft:+g('tl_soft').value, med:+g('tl_med').value, hard:+g('tl_hard').value, wet:+g('tl_wet').value },
+    optimize_target: g('optimize_target').value,
+    access_passcode: g('access').value,
+    driver_names: names
+  };
+  try { localStorage.setItem(window.CONFIG_KEY, JSON.stringify(ov)); } catch(e){}
+  // apply live (no reload needed, except the access gate which runs at load)
+  Object.assign(cfg.tire_life_laps, ov.tire_life_laps);
+  Object.keys(ov).forEach(k => { if(k!=='tire_life_laps' && k!=='driver_names') cfg[k] = ov[k]; });
+  cfg.driver_names = names.slice(); window.DRIVERS = names.slice();
+  $('target').textContent = cfg.optimize_target.replace('_',' ');
+  currentPlan = Engine.generatePlan(cfg, wx);
+  render();
+  closeSetup();
+}
+function resetSetup(){
+  if(!confirm('Reset all race settings to defaults?')) return;
+  try { localStorage.removeItem(window.CONFIG_KEY); } catch(e){}
+  location.reload();
+}
+function openSetup(){ renderSetup(); $('setupModal').classList.add('open'); }
+function closeSetup(){ $('setupModal').classList.remove('open'); }
 
 // ---- live sync: receive telemetry/sim state and re-render ----
 const LIVE_FIELDS = ['fuel_now','laps_done','stint_lap','avg_lap_live','elapsed_s',
