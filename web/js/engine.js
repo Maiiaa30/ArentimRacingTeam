@@ -26,8 +26,23 @@ const Engine = (() => {
 
   // Rough total race laps (time-based race; last lap crosses the flag).
   function estTotalLaps(cfg, weather) {
-    // approximate using dry pace; wet stints adjust length during generation
-    return Math.ceil(cfg.duration_s / cfg.avg_lap_s);
+    // Time-based race: count laps that actually fit in the duration after both
+    // pit-stop time AND the slower wet pace. Estimate stops from fuel range,
+    // subtract their time, then walk the weather timeline lap by lap.
+    const dryCond = { condition: "dry", wetness: 0 };
+    const stintLaps = Math.max(1, lapsPerTank(cfg, dryCond));
+    const rawLaps = cfg.duration_s / cfg.avg_lap_s;
+    const estStops = Math.max(0, Math.ceil(rawLaps / stintLaps) - 1);
+    const racing_s = Math.max(0, cfg.duration_s - estStops * cfg.pit_loss_s);
+    let laps = 0, t = 0;
+    while (laps < 100000) {
+      const cond = conditionAt(weather, t);
+      const lap_s = (cond.condition === "wet" || cond.wetness > 0)
+        ? cfg.avg_lap_s * cfg.wet_lap_factor : cfg.avg_lap_s;
+      if (t + lap_s > racing_s) break;
+      t += lap_s; laps++;
+    }
+    return Math.max(1, laps);
   }
 
   // ---- layer 1: generate full plan ----
