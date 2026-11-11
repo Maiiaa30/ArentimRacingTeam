@@ -41,6 +41,14 @@ header::before{content:"";position:absolute;left:0;top:0;right:0;height:2px;
 .mid > .panel{min-height:0}
 .mid > .grid{min-height:0;grid-template-rows:auto auto auto;overflow:auto}
 
+/* ---- weather timeline strip ---- */
+.wx-strip{display:flex;align-items:center;gap:12px;flex:0 0 auto}
+.wx-bar{position:relative;flex:1;height:16px;border-radius:8px;overflow:hidden;
+  border:1px solid var(--line2);background:#0c0f15}
+.wx-bar i{position:absolute;top:0;bottom:0}
+.wx-bar .mark{position:absolute;top:-3px;bottom:-3px;width:2px;background:#fff;box-shadow:0 0 4px #fff}
+.wx-label{font-family:var(--mono);font-size:12px;white-space:nowrap;min-width:110px;text-align:right}
+
 /* ---- box / swap alert banner ---- */
 .box-alert{display:none;align-items:center;justify-content:center;gap:8px;
   background:rgba(255,59,48,.14);border:1px solid var(--bad);color:#ff6a60;

@@ -36,6 +36,12 @@
     <div class="mini"><span class="k">Penalties</span><span class="v" id="pen">—</span></div>
   </div>
 
+  <!-- weather timeline -->
+  <div class="wx-strip">
+    <div class="wx-bar" id="wxBar"></div>
+    <div class="wx-label" id="wxLabel">—</div>
+  </div>
+
   <div class="grid mid">
     <!-- plan -->
     <div class="panel">
@@ -221,7 +227,33 @@ function render(){
   });
   $('planSummary').textContent = `${plan.total_laps} laps · ${plan.stops} stops · finish est ${hms(plan.finish_time_s)}`;
 
+  renderWxStrip();
   if($('dmgModal').classList.contains('open')) renderDamage();
+}
+
+function renderWxStrip(){
+  const D = cfg.duration_s;
+  const segs = [...wx].sort((a,b)=>a.start_s-b.start_s);
+  let bars='';
+  segs.forEach((s,i)=>{
+    const start = Math.max(0,s.start_s), end = i<segs.length-1 ? segs[i+1].start_s : D;
+    const left = start/D*100, w = Math.max(0,(end-start)/D*100);
+    const col = s.condition==='wet' ? '#2f78b5' : '#2a3340';
+    bars += `<i style="left:${left}%;width:${w}%;background:${col}"></i>`;
+  });
+  const markPct = Math.min(100, state.elapsed_s/D*100);
+  bars += `<span class="mark" style="left:${markPct}%"></span>`;
+  $('wxBar').innerHTML = bars;
+  // label: wet now? else next wet
+  const nowWet = Engine.conditionAt(wx, state.elapsed_s).condition==='wet';
+  let label;
+  if(nowWet) label='WET NOW';
+  else {
+    const nextWet = segs.find(s=> s.condition==='wet' && s.start_s>state.elapsed_s);
+    label = nextWet ? 'rain in '+Math.round((nextWet.start_s-state.elapsed_s)/60)+'m' : 'dry rest of race';
+  }
+  $('wxLabel').textContent = label;
+  $('wxLabel').style.color = nowWet ? '#49b6ff' : 'var(--mut)';
 }
 
 // ---- damage detail modal ----

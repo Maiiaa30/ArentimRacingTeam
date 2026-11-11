@@ -50,5 +50,7 @@ window.DRIVERS = ["D1", "D2", "D3", "D4"];
 // Weather timeline — pulled from game later; manual for now.
 // Each segment: { start_s, condition: "dry"|"wet", wetness: 0..1 }
 window.WEATHER_TIMELINE = [
-  { start_s: 0, condition: "dry", wetness: 0 }
+  { start_s: 0,     condition: "dry", wetness: 0 },
+  { start_s: 12600, condition: "wet", wetness: 0.6 },  // demo: rain ~3h30
+  { start_s: 16200, condition: "dry", wetness: 0 }     // dries ~4h30
 ];
