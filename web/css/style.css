@@ -287,3 +287,49 @@ label.fld{display:flex;justify-content:space-between;align-items:center;gap:10px
 }
 /* big TV: let it breathe */
 @media(min-width:1600px){ .wrap{max-width:1500px} }
+
+/* ============================================================
+   PORTRAIT / VERTICAL MONITOR — stack down the tall screen,
+   size up for distance viewing, fill the height (no empty void).
+   ============================================================ */
+@media (orientation: portrait) and (min-width: 700px){
+  body{height:auto;min-height:100dvh;overflow-y:auto}
+  .wrap{max-width:none;gap:16px;padding:16px 20px}
+
+  /* main area stacks: strategy, then status|tires, then events */
+  .mid{grid-template-columns:1fr;flex:0 1 auto;gap:16px;align-items:stretch}
+  .rightcol{grid-template-columns:1fr 1fr;gap:16px}
+  .tbl-scroll{max-height:none;overflow:visible}
+
+  /* hero stats — big */
+  .big3 .stat{padding:22px 18px}
+  .big3 .label{font-size:13px;letter-spacing:2px}
+  .big3 .val{font-size:clamp(54px,9vw,96px)}
+  .big3 .stat .sub{display:block;font-size:14px}
+
+  /* info strip — 4 wide, two rows, bigger */
+  .strip{grid-template-columns:repeat(4,1fr);gap:12px}
+  .mini{padding:12px 14px}
+  .mini .k{font-size:11px}
+  .mini .v{font-size:21px}
+
+  /* weather taller */
+  .wx-title{font-size:12px;min-width:70px}
+  .wx-bar{height:30px}
+  .wx-seg span{font-size:12px}
+  .wx-ticks span{font-size:11px}
+  .wx-label{font-size:14px;min-width:110px}
+
+  /* panels + table — readable at distance */
+  .panel{padding:20px}
+  .panel h2{font-size:13px}
+  .plan-stats{grid-template-columns:repeat(4,1fr)}
+  .plan-stats .psv{font-size:18px}
+  table{font-size:16px}
+  th{font-size:11px}
+  th,td{padding:11px 8px}
+  .kv{padding:9px 0;font-size:15px}
+  .kv .v{font-size:18px}
+  .ev-log{max-height:none}
+  .btns button{font-size:14px;padding:10px 14px}
+}
