@@ -73,11 +73,42 @@ def _norm_class(c):
     return c.strip()
 
 
+# Known manufacturers (LMU Hypercar + LMGT3). Longest/multi-word FIRST so
+# "Aston Martin" wins over "Aston" and "Mercedes-AMG" over "Mercedes".
+_MANUF_KEYS = [
+    "Aston Martin", "Mercedes-AMG", "Lamborghini", "Chevrolet", "Corvette",
+    "McLaren", "Cadillac", "Porsche", "Peugeot", "Genesis", "Ferrari",
+    "Toyota", "Alpine", "Lexus", "Mustang", "Ford", "Mercedes", "BMW",
+    "Audi", "Nissan", "Honda", "Isotta",
+]
+# LMGT3 (and some Hypercar) car names carry ONLY the team, never the brand, so
+# map the known 2026 WEC/LMU entrants to the manufacturer they run. Substring
+# match, lowercase. Keep more-specific keys workable regardless of order.
+_TEAM_BRAND = {
+    "af corse": "Ferrari",          # Ferrari AF Corse + Vista AF Corse
+    "heart of racing": "Aston Martin",
+    "garage 59": "McLaren",
+    "team wrt": "BMW",
+    "akkodis": "Lexus",             # Akkodis ASP Team
+    "manthey": "Porsche",           # Manthey DK Engineering / The Bend Manthey
+    "iron lynx": "Mercedes-AMG",
+    "proton": "Ford",               # Proton Competition — Ford Mustang
+    "by tf": "Chevrolet",           # Racing Team Turkey by TF — Corvette
+    "tf sport": "Chevrolet",        # TF Sport — Corvette Z06
+}
+
 def _parse_veh(raw):
     """LMU mVehicleName -> (clean_name, manuf, team, num).
 
-    'Cadillac Hertz Team Jota 2026 #12:LM'
-      -> ('Cadillac Hertz Team Jota 2026 #12', 'Cadillac', 'Hertz Team Jota', '12')
+    The game names cars 'Manufacturer Entrant Year #Num:Class', but the
+    manufacturer can be multi-word ('Aston Martin', 'BMW M') or absent
+    ('AF Corse' = Ferrari). Detect the brand from a known list, then show the
+    entrant with the brand prefix trimmed so the team column reads cleanly.
+
+    'Aston Martin THOR Team 2026 #007:LM' -> ('Aston Martin THOR Team 2026 #007',
+                                              'Aston Martin', 'THOR Team', '007')
+    'Ferrari AF Corse 2026 #50'           -> (..., 'Ferrari', 'AF Corse', '50')
+    'AF Corse 2026 #83'                   -> (..., 'Ferrari', 'AF Corse', '83')
     """
     raw = (raw or "").split(":")[0].strip()        # drop trailing class tag ":LM"
     if not raw:
@@ -85,11 +116,29 @@ def _parse_veh(raw):
     m = re.search(r"#(\w+)", raw)
     num = m.group(1) if m else None
     base = re.sub(r"\s*#\w+", "", raw).strip()      # drop the car number
-    toks = base.split()
-    manuf = toks[0] if toks else ""
-    rest = base[len(manuf):].strip()
-    team = re.sub(r"\s*\b(?:19|20)\d{2}\b", "", rest).strip() or rest  # drop year
-    return (raw, manuf, team, num)
+    entrant = re.sub(r"\s*\b(?:19|20)\d{2}\b", "", base).strip() or base  # drop year
+    low = entrant.lower()
+
+    manuf = ""
+    for k in _MANUF_KEYS:
+        if k.lower() in low:
+            manuf = k
+            break
+    if not manuf:
+        for t, b in _TEAM_BRAND.items():
+            if t in low:
+                manuf = b
+                break
+    if not manuf:
+        manuf = entrant.split()[0] if entrant.split() else ""
+
+    # team = entrant minus the leading brand word(s), when that leaves something.
+    team = entrant
+    if manuf and low.startswith(manuf.lower()):
+        stripped = entrant[len(manuf):].strip()
+        if stripped:
+            team = stripped
+    return (base, manuf, team, num)
 
 
 def read_state(info):
