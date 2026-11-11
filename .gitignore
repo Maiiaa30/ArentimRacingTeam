@@ -24,3 +24,5 @@ dist/
 # filled bridge launcher (contains write passcode)
 start-bridge.bat
 bridge/start-bridge.bat
+start-bridge.sh
+bridge/start-bridge.sh
