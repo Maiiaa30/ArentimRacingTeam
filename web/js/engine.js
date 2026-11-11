@@ -59,6 +59,7 @@ const Engine = (() => {
     let usedTires = start.tires_used;
     let driver = start.driver_idx;
     let prevCompound = null;
+    let lapsOnSet = 0;           // laps run on the current tyre set
     let idx = 0;
 
     while (lap < totalLaps) {
@@ -80,18 +81,25 @@ const Engine = (() => {
       // tire action: reuse (double-stint) if same compound still has life & budget tight
       let tireAction = "new";
       if (idx > 0) {
-        const budgetSetsLeft = Math.floor(budgetLeft() / perChange);
+        // keep a reserve set (wets / damage) out of the dry allocation
+        const reserve = cfg.tire_reserve_sets || 0;
+        const budgetSetsLeft = Math.floor(budgetLeft() / perChange) - reserve;
         const stintsLeftEst = Math.ceil((totalLaps - lap) / maxFuelLaps);
         const mustRation = budgetSetsLeft < stintsLeftEst;
-        if (mustRation && prevCompound === compound) tireAction = "stay";
+        const setHasLife = (lapsOnSet + stintLen) <= tireLaps;   // don't over-run a set
+        if (mustRation && prevCompound === compound && setHasLife) tireAction = "stay";
       }
-      if (tireAction === "new") usedTires += perChange;
+      if (tireAction === "new") { usedTires += perChange; lapsOnSet = stintLen; }
+      else { lapsOnSet += stintLen; }
 
       const stintTime = stintLen * lapTimeAt(cfg, cond);
+      // explicit rotation if given (driver_sequence), else plain round-robin.
+      const seq = (cfg.driver_sequence && cfg.driver_sequence.length) ? cfg.driver_sequence : null;
+      const driverName = seq ? seq[driver % seq.length] : cfg.driver_names[driver % cfg.n_drivers];
       stints.push({
         idx,
         status: "future",
-        driver: cfg.driver_names[driver % cfg.n_drivers],
+        driver: driverName,
         in_lap: lap,
         in_time_s: elapsed,
         tire_compound: compound,
@@ -106,6 +114,19 @@ const Engine = (() => {
       prevCompound = compound;
       idx++;
       if (idx > 200) break; // safety
+    }
+
+    // Fold a tiny final stint (time-based remainder, e.g. 1 lap) into the one
+    // before it — avoids a degenerate extra "stint"/stop at the flag.
+    const TAIL_MIN = 6;
+    if (stints.length > 1) {
+      const last = stints[stints.length - 1];
+      if (last.target_laps < TAIL_MIN) {
+        const prev = stints[stints.length - 2];
+        prev.target_laps += last.target_laps;
+        if (last.tire_action === "new") usedTires -= perChange;
+        stints.pop();
+      }
     }
 
     return {

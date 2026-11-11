@@ -102,6 +102,7 @@
           <button onclick="openDrivers()">Driver load</button>
           <button onclick="openTimeline()">Timeline</button>
           <button onclick="openStandings()">Standings</button>
+          <button onclick="openDefaultStrat()">Default strat</button>
         </div>
         <p class="note">Locks past stints, regenerates the rest of the race.</p>
         <div id="evLog" class="ev-log cscroll"></div>
@@ -159,6 +160,17 @@
     <p class="note" style="margin-top:0">Stints across the race by driver and compound. The line marks where we are now.</p>
     <div id="tlBody"></div>
     <div id="tlLegend" class="tl-legend"></div>
+  </div>
+</div>
+
+<!-- default (baseline) strategy modal -->
+<div class="modal-bg" id="defModal">
+  <div class="modal wide xl">
+    <button class="x" onclick="closeDefaultStrat()">✕</button>
+    <h2>Default strategy — baseline plan</h2>
+    <p class="note" style="margin-top:0">The agreed pre-race plan (dry). The live plan adapts from here as fuel, pace and weather change — this view always shows the fixed baseline to compare against.</p>
+    <div id="defSummary" class="def-summary"></div>
+    <div id="defBody" class="cscroll"></div>
   </div>
 </div>
 
@@ -234,6 +246,10 @@ let state = { fuel_now:null, fuel_capacity:null, laps_done:0, stint_lap:0, avg_l
 
 // live plan — events regenerate it; render reads it
 let currentPlan = Engine.generatePlan(cfg, wx);
+// Fixed baseline (the "default strategy"): pristine dry-weather plan, never
+// regenerated — the reference the live plan is compared against.
+const DEFAULT_PLAN = JSON.parse(JSON.stringify(Engine.generatePlan(cfg,
+  [{start_s:0, condition:'dry', wetness:0}])));
 
 const $=id=>document.getElementById(id);
 const hms=s=>{s=Math.max(0,s|0);return `${(s/3600|0)}:${String(s/60%60|0).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`};
@@ -992,6 +1008,50 @@ function renderTimeline(){
 }
 function openTimeline(){ renderTimeline(); $('tlModal').classList.add('open'); }
 function closeTimeline(){ $('tlModal').classList.remove('open'); }
+
+// ---- default (baseline) strategy view ----
+function renderDefaultStrat(){
+  const p = DEFAULT_PLAN;
+  const hms2 = s => { s=Math.max(0,s|0); return `${(s/3600|0)}:${String(s/60%60|0).padStart(2,'0')}`; };
+  const mmss = s => { s=Math.max(0,s|0); return `${(s/60|0)}:${String(s%60).padStart(2,'0')}`; };
+  // per-driver time + stint totals
+  const byDriver={};
+  p.stints.forEach((s,i)=>{
+    const next=p.stints[i+1]; const end=next?next.in_time_s:p.finish_time_s;
+    byDriver[s.driver]=(byDriver[s.driver]||0)+Math.max(0,end-s.in_time_s);
+  });
+  const drv=Object.entries(byDriver).map(([n,t])=>`<span class="dchip">${n}: <b>${Math.round(t/60)}m</b></span>`).join('');
+  $('defSummary').innerHTML =
+    `<div class="def-kpis">`+
+      `<div class="dk"><span>Stints</span><b>${p.stints.length}</b></div>`+
+      `<div class="dk"><span>Pit stops</span><b>${p.stops}</b></div>`+
+      `<div class="dk"><span>Tyre sets</span><b class="${p.tires_over_budget?'bad':''}">${Math.ceil(p.tires_used/4)} / ${Math.floor(cfg.tire_budget/4)}</b></div>`+
+      `<div class="dk"><span>Est. laps</span><b>${p.total_laps}</b></div>`+
+      `<div class="dk"><span>Finish</span><b>${hms2(p.finish_time_s)}</b></div>`+
+    `</div><div class="def-drivers">${drv}</div>`;
+  let rows='';
+  p.stints.forEach((s,i)=>{
+    const next=p.stints[i+1]; const end=next?next.in_time_s:p.finish_time_s;
+    const dur=Math.max(0,end-s.in_time_s);
+    const first = i===0 ? '<span class="tag-start">START</span>' : '';
+    const last = i===p.stints.length-1 ? '<span class="tag-finish">TO FLAG</span>' : '';
+    rows+=`<tr>`+
+      `<td>${s.idx+1}</td>`+
+      `<td class="dn">${s.driver} ${first}${last}</td>`+
+      `<td>${s.in_lap}</td>`+
+      `<td class="dim">${hms2(s.in_time_s)}</td>`+
+      `<td><span class="tire ${s.tire_compound}">${s.tire_compound.toUpperCase()}</span></td>`+
+      `<td class="act ${s.tire_action}">${s.tire_action==='stay'?'double-stint':'new set'}</td>`+
+      `<td>${s.fuel_load.toFixed(1)}L</td>`+
+      `<td>${s.target_laps}</td>`+
+      `<td class="dim">${mmss(dur)}</td></tr>`;
+  });
+  $('defBody').innerHTML =
+    `<table class="laptbl"><thead><tr><th>#</th><th>Driver</th><th>In-lap</th><th>At</th>`+
+    `<th>Tyre</th><th>Action</th><th>Fuel</th><th>Laps</th><th>Stint</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+function openDefaultStrat(){ renderDefaultStrat(); $('defModal').classList.add('open'); }
+function closeDefaultStrat(){ $('defModal').classList.remove('open'); }
 
 // ---- live sync: receive telemetry/sim state and re-render ----
 // NOTE: stint_time_s / laps_on_tires / last_pit_lap are DERIVED on the dashboard
