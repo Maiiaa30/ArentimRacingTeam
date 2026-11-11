@@ -40,7 +40,11 @@
 
   <!-- weather timeline -->
   <div class="wx-strip">
-    <div class="wx-bar" id="wxBar"></div>
+    <span class="wx-title">WEATHER</span>
+    <div class="wx-wrap">
+      <div class="wx-bar" id="wxBar"></div>
+      <div class="wx-ticks" id="wxTicks"></div>
+    </div>
     <div class="wx-label" id="wxLabel">—</div>
   </div>
 
@@ -48,6 +52,7 @@
     <!-- plan -->
     <div class="panel">
       <h2>Race strategy</h2>
+      <div class="plan-stats" id="planStats"></div>
       <div class="tbl-scroll">
         <table>
           <thead><tr><th>#</th><th>Drv</th><th>In-lap</th><th>Tire</th><th>Act</th><th>Fuel</th><th>Laps</th></tr></thead>
@@ -211,13 +216,6 @@ let currentPlan = Engine.generatePlan(cfg, wx);
 const $=id=>document.getElementById(id);
 const hms=s=>{s=Math.max(0,s|0);return `${(s/3600|0)}:${String(s/60%60|0).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`};
 const fmtLap=s=>{ if(s==null)return '—'; return s>=60?`${(s/60|0)}:${(s%60).toFixed(3).padStart(6,'0')}`:s.toFixed(3)+'s'; };
-let _audio;
-function beep(){ try{ _audio=_audio||new (window.AudioContext||window.webkitAudioContext)();
-  const o=_audio.createOscillator(), g=_audio.createGain(); o.type='square'; o.frequency.value=880;
-  o.connect(g); g.connect(_audio.destination);
-  g.gain.setValueAtTime(0.14,_audio.currentTime); g.gain.exponentialRampToValueAtTime(0.001,_audio.currentTime+0.45);
-  o.start(); o.stop(_audio.currentTime+0.45); }catch(e){} }
-
 function render(){
   const plan = currentPlan;
   // which stint are we in, how many stops remain
@@ -251,8 +249,7 @@ function render(){
   const boxOn = m.pit_in_laps <= 2;
   $('boxAlert').classList.toggle('on', boxOn);
   $('boxNext').textContent = nextStint ? nextStint.driver : 'same driver';
-  if(boxOn && !window._boxState) beep();   // beep once on entering the box window
-  window._boxState = boxOn;
+  window._boxState = boxOn;   // visual BOX banner only — no sound
   // race info strip
   $('pos').textContent = state.position ? 'P'+state.position : '—';
   $('gapA').textContent = state.gap_ahead_s==null ? '—' : '+'+state.gap_ahead_s.toFixed(1)+'s';
@@ -294,35 +291,55 @@ function render(){
       `<td>${s.fuel_load.toFixed(1)}</td><td>${s.target_laps}</td>`;
     tb.appendChild(tr);
   });
-  $('planSummary').textContent = `${plan.total_laps} laps · ${plan.stops} stops · finish est ${hms(plan.finish_time_s)}`;
+  // strategy stats
+  const nextPit = plan.stints.find(s=> s.in_lap > state.laps_done);
+  const margin = cfg.duration_s - plan.finish_time_s;
+  const tyreOver = plan.tires_over_budget;
+  $('planStats').innerHTML =
+    `<div class="ps"><span class="psk">Stops</span><span class="psv">${plan.stops}</span></div>`+
+    `<div class="ps"><span class="psk">Tyres</span><span class="psv ${tyreOver?'bad':''}">${plan.tires_used}/${cfg.tire_budget}</span></div>`+
+    `<div class="ps"><span class="psk">Next pit</span><span class="psv">${nextPit?('lap '+nextPit.in_lap):'—'}</span></div>`+
+    `<div class="ps"><span class="psk">Finish est</span><span class="psv ${margin<0?'bad':''}">${hms(plan.finish_time_s)}</span></div>`;
+  $('planSummary').textContent = `${plan.total_laps} laps · ${plan.stops} stops · est finish ${hms(plan.finish_time_s)}`
+    + (margin>=0?` (+${hms(margin)} margin)`:` (${hms(-margin)} OVER race time)`);
 
   renderWxStrip();
   if($('dmgModal').classList.contains('open')) renderDamage();
 }
 
 function renderWxStrip(){
-  const D = cfg.duration_s;
+  const D = cfg.duration_s || 1;
   const segs = [...wx].sort((a,b)=>a.start_s-b.start_s);
   let bars='';
   segs.forEach((s,i)=>{
     const start = Math.max(0,s.start_s), end = i<segs.length-1 ? segs[i+1].start_s : D;
-    const left = start/D*100, w = Math.max(0,(end-start)/D*100);
-    const col = s.condition==='wet' ? '#2f78b5' : '#2a3340';
-    bars += `<i style="left:${left}%;width:${w}%;background:${col}"></i>`;
+    const w = Math.max(0,(end-start)/D*100);
+    const wet = s.condition==='wet' || s.wetness>0;
+    // show the label inside the segment only when it's wide enough to read
+    const txt = w>7 ? `<span>${wet?'WET':'DRY'}${wet&&s.wetness?` ${Math.round(s.wetness*100)}%`:''}</span>` : '';
+    bars += `<div class="wx-seg ${wet?'wet':'dry'}" style="width:${w}%">${txt}</div>`;
   });
-  const markPct = Math.min(100, state.elapsed_s/D*100);
-  bars += `<span class="mark" style="left:${markPct}%"></span>`;
+  const markPct = Math.min(100, (state.elapsed_s||0)/D*100);
+  bars += `<div class="wx-now" style="left:${markPct}%"></div>`;
   $('wxBar').innerHTML = bars;
-  // label: wet now? else next wet
-  const nowWet = Engine.conditionAt(wx, state.elapsed_s).condition==='wet';
+
+  // hour ticks
+  const hrs = Math.round(D/3600);
+  let ticks='';
+  for(let h=0; h<=hrs; h++){ ticks += `<span style="left:${h*3600/D*100}%">${h}h</span>`; }
+  $('wxTicks').innerHTML = ticks;
+
+  // status label
+  const cond = Engine.conditionAt(wx, state.elapsed_s||0);
+  const nowWet = cond.condition==='wet' || cond.wetness>0;
   let label;
-  if(nowWet) label='WET NOW';
+  if(nowWet) label = '● WET NOW';
   else {
-    const nextWet = segs.find(s=> s.condition==='wet' && s.start_s>state.elapsed_s);
-    label = nextWet ? 'rain in '+Math.round((nextWet.start_s-state.elapsed_s)/60)+'m' : 'dry rest of race';
+    const nextWet = segs.find(s=> (s.condition==='wet'||s.wetness>0) && s.start_s>(state.elapsed_s||0));
+    label = nextWet ? 'rain in ~'+Math.round((nextWet.start_s-(state.elapsed_s||0))/60)+'m' : 'dry all race';
   }
   $('wxLabel').textContent = label;
-  $('wxLabel').style.color = nowWet ? '#49b6ff' : 'var(--mut)';
+  $('wxLabel').className = 'wx-label' + (nowWet?' wet':'');
 }
 
 // ---- damage detail modal ----
