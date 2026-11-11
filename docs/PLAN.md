@@ -1,0 +1,68 @@
+# Pit Wall — Full Plan
+
+## Locked facts
+- Sim: **Le Mans Ultimate** (rF2 engine).
+- Race: **6 hours**, one shared car, **4 drivers**, free swaps (no drive-time rules).
+- Tires: **20-tire budget**, wets come out of the same 20. Counting mode (set vs individual)
+  TBD — configurable (`tire_count_mode`), confirm in-game.
+- Weather: **pulled from game timeline** + live wetness; manual fallback. We do NOT predict.
+- Data in: **auto from telemetry** (fuel, lap, driver, pits, weather) — validate fields first.
+- SC/FCY: not in game → **dropped**. One manual "Caution/Incident" instead.
+- Optimize target: **operator picks** per race — fewest_stops / fastest / safest.
+
+## Concept — 3 layers + sandbox
+1. **Planner** — generate full stint/pit/tire/driver plan from inputs.
+2. **Live tracker** — real data vs plan: pit-in-N, fuel delta, make-finish, swap countdown.
+3. **Event engine** — Rain / Forced Pit / Pace Change → lock past, regenerate remainder.
+4. **What-if** — non-destructive scenario test alongside live plan.
+
+## Architecture
+```
+REAL (later):  LMU PC → rF2 shared-mem plugin → Python bridge → Supabase
+DEV (now):     sim.html feeder → (Supabase) → dashboard
+BOTH:          Supabase (Postgres + realtime) → dashboard (static SPA, your domain)
+                                             ← operator events write back
+```
+- Frontend: static SPA, your domain. Realtime via Supabase JS.
+- Backend: Supabase (free tier), no server to run.
+- Bridge: Python (pyRfactor2SharedMemory + supabase-py), later phase.
+
+## Data model (Supabase)
+- `race_config` — duration, pace, fuel, tank, drivers, tire_budget, tire_count_mode,
+  tire_life, pit_loss, wet factors, optimize_target.
+- `race_state` — elapsed, laps_done, fuel_now, last/avg lap, driver, stint_lap, tires_used,
+  weather_now, flag, active_pc, updated_at.
+- `weather_timeline` — [{start_s, condition, wetness}].
+- `plan_stints` — idx, status, driver, in_lap, in_time, compound, action(new|stay), fuel, laps.
+- `lap_log` — lap_no, lap_s, fuel_at_lap, driver, weather, ts.
+- `events` — type, ts, payload, note.
+
+## Strategy math — see `web/js/engine.js` (working implementation)
+- `generatePlan` — fuel-limited + tire-limited stint fill, driver round-robin, weather overlay,
+  tire rationing (double-stint when budget < stints needed), target-driven compound choice.
+- `liveMetrics` — fuel_laps_left, pit_in_laps, make_finish, fuel_deficit.
+- `regenerate` — lock done stints, rebuild remainder from current real state.
+- `whatIf` — clone + hypothetical, run regenerate, no commit.
+
+## Build phases
+1. Schema + dashboard shell ✅ (scaffold)
+2. Strategy engine ✅ (pure JS)  ← refine math vs real practice data
+3. Dashboard ↔ realtime (Supabase) + sim feeder writes live
+4. Sim feeder polish — rehearse full race
+5. Event engine + what-if sandbox (wire buttons)
+6. Real LMU Python bridge + **validate fields**
+7. Multi-PC driver-swap continuity
+8. Polish — alarms (box/swap horn), weather strip, export
+
+Phases 1–5 need no game.
+
+## Risks to validate
+- **LMU shared memory fields** — fuel + wetness + forecast exposed? (biggest unknown)
+- **Tire counting mode** in LMU (set vs per-tire).
+- **Driver-swap telemetry continuity** across PCs.
+- **Dry↔wet crossover lap** timing — model simply first.
+
+## Open / TODO
+- Real values: avg_lap_s, fuel_per_lap, tank_cap, pit_loss_s, wet_lap_factor, tire_life — from practice.
+- Hosting target for the domain (Netlify / Vercel / Cloudflare / own box).
+- Supabase project + keys (kept in gitignored `web/supabase.local.js`).

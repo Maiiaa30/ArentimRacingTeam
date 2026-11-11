@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arentim Racing Team — Pit Wall</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header>
+  <h1>🏁 ARENTIM RACING — PIT WALL</h1>
+  <span class="chip" id="clock">--:--:--</span>
+  <span class="chip" id="wx">dry</span>
+  <span class="chip" id="target">fewest_stops</span>
+</header>
+
+<div class="wrap">
+  <!-- big 3 -->
+  <div class="big3">
+    <div class="card"><div class="label">Fuel laps left</div><div class="val" id="fuelLaps">—</div></div>
+    <div class="card"><div class="label">Pit in (laps)</div><div class="val" id="pitIn">—</div></div>
+    <div class="card"><div class="label">Stint lap</div><div class="val" id="stint">—</div></div>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <h2>Status</h2>
+      <div id="status"></div>
+    </div>
+    <div class="card">
+      <h2>Tires</h2>
+      <div id="tires"></div>
+      <h2 style="margin-top:14px">Events</h2>
+      <div class="btns">
+        <button class="alert" onclick="ev('rain_now')">Rain NOW</button>
+        <button class="alert" onclick="ev('forced_pit')">Forced Pit</button>
+        <button onclick="ev('pace_change')">Pace Change</button>
+      </div>
+      <p class="note">Events lock past stints and regenerate the rest of the race.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Race plan</h2>
+    <table>
+      <thead><tr><th>#</th><th>Driver</th><th>In-lap</th><th>Tire</th><th>Action</th><th>Fuel</th><th>Laps</th></tr></thead>
+      <tbody id="plan"></tbody>
+    </table>
+    <p class="note" id="planSummary"></p>
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/supabase.js"></script>
+<script>
+// Dev render: build a plan from defaults and show it. Live data wired in phase 3.
+const cfg = window.RACE_CONFIG, wx = window.WEATHER_TIMELINE;
+document.getElementById('target').textContent = cfg.optimize_target;
+
+let state = {
+  fuel_now: cfg.tank_cap, laps_done: 0, stint_lap: 0,
+  avg_lap_live: cfg.avg_lap_s, elapsed_s: 0, remaining_stops: null, driver_idx: 0, tires_used: 0
+};
+
+function hms(s){s=Math.max(0,s|0);return `${(s/3600|0)}:${String(s/60%60|0).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`}
+
+function render(){
+  const plan = Engine.generatePlan(cfg, wx);
+  const m = Engine.liveMetrics(cfg, {...state, remaining_stops: plan.stops}, plan, wx);
+
+  document.getElementById('clock').textContent = hms(cfg.duration_s - state.elapsed_s);
+  document.getElementById('wx').textContent = m.weather_now;
+  document.getElementById('fuelLaps').textContent = m.fuel_laps_left;
+  document.getElementById('pitIn').textContent = m.pit_in_laps;
+  document.getElementById('stint').textContent = state.stint_lap + ' / ' + (plan.stints[0]?.target_laps ?? '—');
+
+  document.getElementById('status').innerHTML =
+    `Laps left: <b>${m.laps_left}</b><br>Stops planned: <b>${plan.stops}</b><br>`+
+    `Make finish: <b class="${m.make_finish?'ok':'bad'}">${m.make_finish?'YES':'NO'}</b>`+
+    (m.fuel_deficit>0?` <span class="bad">(short ${m.fuel_deficit} L)</span>`:'');
+
+  const over = plan.tires_over_budget;
+  document.getElementById('tires').innerHTML =
+    `Used: <b class="${over?'bad':'ok'}">${plan.tires_used}</b> / ${cfg.tire_budget}`+
+    (over?` <span class="bad">OVER BUDGET — must double-stint more</span>`:'');
+
+  const tb = document.getElementById('plan'); tb.innerHTML='';
+  plan.stints.forEach((s,i)=>{
+    const tr=document.createElement('tr');
+    if(i===0) tr.className='active';
+    tr.innerHTML=`<td>${s.idx+1}</td><td>${s.driver}</td><td>${s.in_lap}</td>`+
+      `<td class="${s.tire_compound==='wet'?'wet':''}">${s.tire_compound}</td>`+
+      `<td>${s.tire_action}</td><td>${s.fuel_load.toFixed(1)}</td><td>${s.target_laps}</td>`;
+    tb.appendChild(tr);
+  });
+  document.getElementById('planSummary').textContent =
+    `${plan.total_laps} laps · ${plan.stops} stops · finish est ${hms(plan.finish_time_s)}`;
+}
+
+function ev(type){
+  if(type==='rain_now'){ wx.push({start_s: state.elapsed_s, condition:'wet', wetness:0.6}); }
+  // forced_pit / pace_change wiring comes in phase 5 (event engine)
+  alert('Event: '+type+' — regenerate logic wires in phase 5. Weather applied for rain.');
+  render();
+}
+render();
+</script>
+</body>
+</html>

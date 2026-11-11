@@ -1,0 +1,162 @@
+// Strategy engine — pure functions, no deps, no DOM.
+// Three jobs: generate a plan, compute live metrics, regenerate the remainder.
+// All times seconds, fuel liters, distance laps.
+
+const Engine = (() => {
+
+  // ---- helpers ----
+  const tiresPerChange = (cfg) => cfg.tire_count_mode === "set" ? 4 : 1;
+
+  function conditionAt(weather, elapsed_s) {
+    let cur = weather[0] || { condition: "dry", wetness: 0 };
+    for (const seg of weather) if (seg.start_s <= elapsed_s) cur = seg;
+    return cur;
+  }
+
+  function lapFuelAt(cfg, cond) {
+    return cond.condition === "wet" ? cfg.fuel_per_lap * cfg.wet_fuel_factor : cfg.fuel_per_lap;
+  }
+  function lapTimeAt(cfg, cond) {
+    return cond.condition === "wet" ? cfg.avg_lap_s * cfg.wet_lap_factor : cfg.avg_lap_s;
+  }
+
+  function lapsPerTank(cfg, cond) {
+    return Math.max(1, Math.floor(cfg.tank_cap / lapFuelAt(cfg, cond)) - cfg.fuel_margin_laps);
+  }
+
+  // Rough total race laps (time-based race; last lap crosses the flag).
+  function estTotalLaps(cfg, weather) {
+    // approximate using dry pace; wet stints adjust length during generation
+    return Math.ceil(cfg.duration_s / cfg.avg_lap_s);
+  }
+
+  // ---- layer 1: generate full plan ----
+  // start = { lap: 0, elapsed_s: 0, fuel_now: tank, tires_used: 0, driver_idx: 0 }
+  function generatePlan(cfg, weather, start) {
+    start = start || { lap: 0, elapsed_s: 0, fuel_now: cfg.tank_cap, tires_used: 0, driver_idx: 0 };
+    const totalLaps = estTotalLaps(cfg, weather);
+    const perChange = tiresPerChange(cfg);
+    const budgetLeft = () => cfg.tire_budget - usedTires;
+
+    let stints = [];
+    let lap = start.lap;
+    let elapsed = start.elapsed_s;
+    let usedTires = start.tires_used;
+    let driver = start.driver_idx;
+    let prevCompound = null;
+    let idx = 0;
+
+    while (lap < totalLaps) {
+      const cond = conditionAt(weather, elapsed);
+      const maxFuelLaps = lapsPerTank(cfg, cond);
+
+      // choose compound: wet if raining, else target-driven
+      let compound;
+      if (cond.condition === "wet") compound = "wet";
+      else if (cfg.optimize_target === "fastest") compound = "soft";
+      else if (cfg.optimize_target === "safest") compound = "hard";
+      else compound = "med"; // fewest_stops
+
+      const tireLaps = cfg.tire_life_laps[compound] || maxFuelLaps;
+
+      // stint length limited by fuel, tires, and race end
+      let stintLen = Math.min(maxFuelLaps, tireLaps, totalLaps - lap);
+
+      // tire action: reuse (double-stint) if same compound still has life & budget tight
+      let tireAction = "new";
+      if (idx > 0) {
+        const budgetSetsLeft = Math.floor(budgetLeft() / perChange);
+        const stintsLeftEst = Math.ceil((totalLaps - lap) / maxFuelLaps);
+        const mustRation = budgetSetsLeft < stintsLeftEst;
+        if (mustRation && prevCompound === compound) tireAction = "stay";
+      }
+      if (tireAction === "new") usedTires += perChange;
+
+      const stintTime = stintLen * lapTimeAt(cfg, cond);
+      stints.push({
+        idx,
+        status: "future",
+        driver: cfg.driver_names[driver % cfg.n_drivers],
+        in_lap: lap,
+        in_time_s: elapsed,
+        tire_compound: compound,
+        tire_action: tireAction,
+        fuel_load: Math.min(cfg.tank_cap, stintLen * lapFuelAt(cfg, cond) + cfg.fuel_margin_laps * lapFuelAt(cfg, cond)),
+        target_laps: stintLen
+      });
+
+      lap += stintLen;
+      elapsed += stintTime + (lap < totalLaps ? cfg.pit_loss_s : 0);
+      driver++;
+      prevCompound = compound;
+      idx++;
+      if (idx > 200) break; // safety
+    }
+
+    return {
+      stints,
+      total_laps: totalLaps,
+      stops: Math.max(0, stints.length - 1),
+      tires_used: usedTires,
+      tires_over_budget: usedTires > cfg.tire_budget,
+      finish_time_s: elapsed
+    };
+  }
+
+  // ---- layer 2: live metrics ----
+  // state = { fuel_now, laps_done, stint_lap, avg_lap_live, elapsed_s, remaining_stops }
+  function liveMetrics(cfg, state, plan, weather) {
+    const cond = conditionAt(weather, state.elapsed_s);
+    const fpl = lapFuelAt(cfg, cond);
+    const fuelLapsLeft = state.fuel_now / fpl;
+    const pitInLaps = Math.max(0, Math.floor(fuelLapsLeft - cfg.fuel_margin_laps));
+    const lapsLeft = plan.total_laps - state.laps_done;
+    const remStops = state.remaining_stops != null ? state.remaining_stops : Math.max(0, plan.stops);
+    const fuelNeeded = lapsLeft * fpl;
+    const fuelAvail = state.fuel_now + remStops * cfg.tank_cap;
+    return {
+      fuel_laps_left: +fuelLapsLeft.toFixed(1),
+      pit_in_laps: pitInLaps,
+      laps_left: lapsLeft,
+      make_finish: fuelAvail >= fuelNeeded,
+      fuel_deficit: +(fuelNeeded - fuelAvail).toFixed(1), // >0 = short
+      weather_now: cond.condition
+    };
+  }
+
+  // ---- layer 3: regenerate remainder ----
+  // lock done/active stints, rebuild the rest from current real state.
+  function regenerate(cfg, weather, currentState, lockedStints) {
+    const tail = generatePlan(cfg, weather, {
+      lap: currentState.laps_done,
+      elapsed_s: currentState.elapsed_s,
+      fuel_now: currentState.fuel_now,
+      tires_used: currentState.tires_used,
+      driver_idx: currentState.driver_idx
+    });
+    // reindex tail after locked stints
+    const base = (lockedStints || []).length;
+    tail.stints.forEach((s, i) => { s.idx = base + i; });
+    return {
+      stints: [...(lockedStints || []), ...tail.stints],
+      total_laps: tail.total_laps,
+      stops: Math.max(0, (lockedStints || []).length + tail.stints.length - 1),
+      tires_used: currentState.tires_used + tail.tires_used,
+      tires_over_budget: (currentState.tires_used + tail.tires_used) > cfg.tire_budget,
+      finish_time_s: tail.finish_time_s
+    };
+  }
+
+  // ---- what-if: non-destructive scenario ----
+  function whatIf(cfg, weather, currentState, lockedStints, overrides) {
+    const c2 = Object.assign({}, cfg, overrides.config || {});
+    const w2 = overrides.weather || weather;
+    const s2 = Object.assign({}, currentState, overrides.state || {});
+    return regenerate(c2, w2, s2, lockedStints);
+  }
+
+  return { generatePlan, liveMetrics, regenerate, whatIf, conditionAt, lapsPerTank, estTotalLaps };
+})();
+
+if (typeof module !== "undefined") module.exports = Engine;
+if (typeof window !== "undefined") window.Engine = Engine;

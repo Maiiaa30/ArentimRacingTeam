@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pit Wall — Sim Feeder (dev)</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header>
+  <h1>🧪 SIM FEEDER — inject fake game data</h1>
+  <span class="chip">dev only</span>
+</header>
+<div class="wrap">
+  <div class="card">
+    <h2>Stands in for the LMU telemetry bridge</h2>
+    <p class="note">Drive the dashboard with these controls to rehearse the whole race in
+      minutes — no game needed. Later this is replaced by the Python bridge pushing real
+      shared-memory data to the same Supabase row.</p>
+
+    <label class="fld">Fuel now (L) <input type="range" id="fuel" min="0" max="75" value="75" oninput="upd()"></label>
+    <label class="fld">Avg lap (s) <input type="number" id="lap" value="95" oninput="upd()"></label>
+    <label class="fld">Laps done <input type="number" id="laps" value="0" oninput="upd()"></label>
+    <label class="fld">Stint lap <input type="number" id="slap" value="0" oninput="upd()"></label>
+    <label class="fld">Elapsed (s) <input type="number" id="el" value="0" oninput="upd()"></label>
+    <label class="fld">Weather
+      <select id="wx" onchange="upd()"><option value="dry">dry</option><option value="wet">wet</option></select>
+    </label>
+    <label class="fld">Driver
+      <select id="drv" onchange="upd()"><option>D1</option><option>D2</option><option>D3</option><option>D4</option></select>
+    </label>
+    <div class="btns">
+      <button onclick="lapTick()">+1 Lap</button>
+      <button onclick="pit()">Pit stop</button>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:12px">
+    <h2>Current sim state (what dashboard would receive)</h2>
+    <pre id="out" style="color:var(--mut);white-space:pre-wrap"></pre>
+    <p class="note">Phase 3: this writes to Supabase <code>race_state</code>; dashboard subscribes.
+      For now it just previews the payload.</p>
+  </div>
+</div>
+<script src="js/config.js"></script>
+<script>
+function state(){
+  return {
+    fuel_now:+fuel.value, avg_lap_live:+lap.value, laps_done:+laps.value,
+    stint_lap:+slap.value, elapsed_s:+el.value, weather_now:wx.value, driver:drv.value,
+    updated_at:new Date().toISOString()
+  };
+}
+function upd(){ out.textContent = JSON.stringify(state(), null, 2); /* PitDB.pushState(state()) later */ }
+function lapTick(){ laps.value=+laps.value+1; slap.value=+slap.value+1;
+  el.value=+el.value+ +lap.value; fuel.value=Math.max(0,+fuel.value-RACE_CONFIG.fuel_per_lap); upd(); }
+function pit(){ slap.value=0; fuel.value=RACE_CONFIG.tank_cap; el.value=+el.value+RACE_CONFIG.pit_loss_s; upd(); }
+upd();
+</script>
+</body>
+</html>

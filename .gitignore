@@ -1,0 +1,22 @@
+# secrets — never commit
+.env
+.env.*
+*.key
+secrets.*
+supabase.local.js
+
+# python bridge
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# node (if tooling added later)
+node_modules/
+dist/
+
+# os / editor
+.DS_Store
+*.swp
+.vscode/
+.idea/
