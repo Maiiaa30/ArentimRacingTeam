@@ -187,31 +187,28 @@ function renderDamage(){
   const pittingAnyway = (Engine.liveMetrics(cfg,{...state,remaining_stops:plan.stops},plan,wx).pit_in_laps <= 1);
   const rec = Engine.repairDecision(cfg, state, penalty, lapsRem, {pitting_anyway:pittingAnyway});
 
-  // car diagram: 8 body panels tiled into a car shape (zone_labels order) + 4 wheels
-  const ZONES=[
-    {x:50,y:26,w:100,h:30,rx:13},   //0 front bumper
-    {x:116,y:62,w:44,h:58,rx:9},    //1 front-right fender
-    {x:116,y:124,w:44,h:66,rx:7},   //2 right side
-    {x:116,y:194,w:44,h:58,rx:9},   //3 rear-right
-    {x:50,y:258,w:100,h:30,rx:13},  //4 rear bumper
-    {x:40,y:194,w:44,h:58,rx:9},    //5 rear-left
-    {x:40,y:124,w:44,h:66,rx:7},    //6 left side
-    {x:40,y:62,w:44,h:58,rx:9}      //7 front-left fender
-  ];
-  const WH=[{x:18,y:72},{x:164,y:72},{x:18,y:198},{x:164,y:198}]; // FL,FR,RL,RR (outside body)
+  // car diagram: real top-view silhouette; 8 body parts light up by dent severity
   const sevN=['none','some','heavy'];
-  const sevFill=s=> s>=2?'#ff3b30' : s>=1?'#f2b600' : '#2b3443';
-  const labels=(cfg.damage&&cfg.damage.zone_labels)||[];
-  const zoneSvg=state.dent.map((s,i)=>{const z=ZONES[i];
-    return `<rect x="${z.x}" y="${z.y}" width="${z.w}" height="${z.h}" rx="${z.rx}" fill="${sevFill(s)}" stroke="#0a0d12" stroke-width="1.5"><title>${labels[i]||('zone '+i)}: ${sevN[s]||s}</title></rect>`;}).join('');
-  const wFill=w=> (w.flat||w.detached)?'#ff3b30' : w.wear>=0.85?'#ff3b30' : w.wear>=0.6?'#f2b600' : '#3a4553';
-  const wheelSvg=state.wheels.map((w,i)=>{const p=WH[i];
-    return `<rect x="${p.x}" y="${p.y}" width="18" height="46" rx="6" fill="${wFill(w)}" stroke="#0a0d12" stroke-width="2"/>`;}).join('');
-  $('carSvg').innerHTML=`<svg viewBox="0 0 200 314" width="186" height="292">
-    ${zoneSvg}
-    <rect x="88" y="62" width="24" height="190" rx="11" fill="#0e1218" stroke="#1a2029" stroke-width="1.5"/>
-    ${wheelSvg}
-  </svg>`;
+  const L=(cfg.damage&&cfg.damage.zone_labels)||[];
+  const sevFill=s=> s>=2?'#ff3b30' : s>=1?'#f2b600' : '#33404f'; // intact = panel trim grey
+  const z=(i,x,y,w,h,rx)=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" `+
+    `fill="${sevFill(state.dent[i])}" stroke="#10151c" stroke-width="1.5">`+
+    `<title>${L[i]||('zone '+i)}: ${sevN[state.dent[i]]||state.dent[i]}</title></rect>`;
+  const wFill=w=> (w.flat||w.detached)?'#ff3b30' : w.wear>=0.85?'#ff3b30' : w.wear>=0.6?'#f2b600' : '#15191f';
+  const tires=[[18,84],[164,84],[18,248],[164,248]].map(([x,y],i)=>
+    `<rect x="${x}" y="${y}" width="18" height="48" rx="6" fill="${wFill(state.wheels[i]||{})}" stroke="#000" stroke-width="2"/>`).join('');
+  const body=`<path d="M100 16 C121 16 133 28 137 52 L151 80 C159 88 161 98 161 112 L161 250 C161 277 157 297 147 313 L120 331 L80 331 L53 313 C43 297 39 277 39 250 L39 112 C39 98 41 88 49 80 L63 52 C67 28 79 16 100 16 Z" fill="#2b3443" stroke="#3a4656" stroke-width="2"/>`;
+  const glass=`<path d="M82 122 L118 122 C123 122 125 125 125 130 L123 210 C123 218 119 222 111 222 L89 222 C81 222 77 218 77 210 L75 130 C75 125 77 122 82 122 Z" fill="#0e1218" stroke="#1a2029"/>`;
+  const zones =
+    z(0,64,6,72,16,8)+      // 0 front splitter
+    z(7,40,80,26,54,9)+     // 7 front-left fender
+    z(1,134,80,26,54,9)+    // 1 front-right fender
+    z(6,40,150,18,78,6)+    // 6 left side
+    z(2,142,150,18,78,6)+   // 2 right side
+    z(5,40,236,26,56,9)+    // 5 rear-left
+    z(3,134,236,26,56,9)+   // 3 rear-right
+    z(4,52,332,96,16,8);    // 4 rear wing
+  $('carSvg').innerHTML=`<svg viewBox="0 0 200 360" width="178" height="320">${tires}${body}${glass}${zones}</svg>`;
 
   const wn=['FL','FR','RL','RR'];
   const wt=state.wheels.map((w,i)=>`<div class="kv"><span class="k">${wn[i]}</span><span class="v">`+
