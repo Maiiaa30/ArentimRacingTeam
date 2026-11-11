@@ -261,6 +261,15 @@ tr.active{background:rgba(225,6,0,.08)} tr.active td:first-child{border-left:2px
 .tyre .tv{font-family:var(--mono);font-size:10.5px;color:var(--mut);line-height:1.4}
 .dmg-meta{margin-top:16px;font-family:var(--mono);font-size:12px;color:var(--dim)}
 /* event log */
+.ev-count{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--txt);
+  background:#1a2430;border:1px solid var(--line);border-radius:10px;padding:1px 7px;letter-spacing:0}
+.ev-expand{margin-left:auto;font-family:var(--mono);font-size:10px;font-weight:700;
+  letter-spacing:.5px;color:var(--mut);background:#131b24;border:1px solid var(--line);
+  border-radius:6px;padding:3px 9px;cursor:pointer;text-transform:none}
+.ev-expand:hover{color:var(--txt);border-color:var(--line2)}
+.ev-clock{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--mut);flex:0 0 auto}
+/* modal event log is free to grow; inline stays a compact preview */
+#evLogFull{max-height:68dvh}
 .ev-log{margin-top:10px;display:flex;flex-direction:column;gap:6px;max-height:118px;overflow:auto}
 .ev-item{display:flex;gap:9px;align-items:flex-start;padding:7px 9px;
   background:#0d131b;border:1px solid var(--line);border-radius:8px;
@@ -273,7 +282,7 @@ tr.active{background:rgba(225,6,0,.08)} tr.active td:first-child{border-left:2px
 .ev-item .ev-t{font-family:var(--mono);font-weight:800;font-size:11px;color:var(--ek);
   flex:0 0 auto}
 .ev-reason{font-family:var(--sans);font-size:12px;color:var(--txt);font-weight:600;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1 1 auto;min-width:0}
 .ev-meta{font-family:var(--mono);font-size:10px;color:var(--mut);margin-top:2px}
 .ev-item .ok{color:var(--ok);font-weight:700} .ev-item .bad{color:var(--bad);font-weight:700}
 

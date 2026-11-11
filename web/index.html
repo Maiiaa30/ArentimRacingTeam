@@ -91,7 +91,9 @@
         <div class="twheels" id="twheels"></div>
       </div>
       <div class="panel evpanel">
-        <h2>Events</h2>
+        <h2>Events <span class="ev-count" id="evCount">0</span>
+          <button class="ev-expand" id="evExpand" onclick="openEvents()" title="Full event history">⤢ Log</button>
+        </h2>
         <div class="btns">
           <button class="alert" onclick="ev('rain_now')">Rain NOW</button>
           <button class="alert" onclick="ev('forced_pit')">Forced Pit</button>
@@ -108,6 +110,20 @@
         <div id="evLog" class="ev-log cscroll"></div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- full event history modal -->
+<div class="modal-bg" id="evModal">
+  <div class="modal wide">
+    <button class="x" onclick="closeEvents()">✕</button>
+    <h2>Event history</h2>
+    <div class="btns" style="margin-top:0">
+      <button onclick="if(confirm('Clear the event log?')){eventLog=[];try{localStorage.setItem(EV_KEY,JSON.stringify(eventLog));}catch(e){} renderEventLog();}">Clear log</button>
+      <span class="chip" id="evModalCount">0 events</span>
+    </div>
+    <p class="note" style="margin-top:8px">Every strategy event — pit stops, weather, incidents, pace calls — newest first.</p>
+    <div id="evLogFull" class="ev-log cscroll"></div>
   </div>
 </div>
 
@@ -706,18 +722,31 @@ function evKind(reason){
   if(r.includes('pace')||r.includes('flag')||r.includes('yellow')) return {k:'pace',ic:'⚑'};
   return {k:'info', ic:'•'};
 }
+function evItemHtml(e){
+  const {k,ic}=evKind(e.reason);
+  const clock = e.ts ? new Date(e.ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+  return `<div class="ev-item ${k}"><span class="ev-ic">${ic}</span>`+
+    `<div class="ev-body"><div class="ev-row1"><span class="ev-t">L${e.lap}</span>`+
+    `<span class="ev-reason">${e.reason}</span>${clock?`<span class="ev-clock">${clock}</span>`:''}</div>`+
+    `<div class="ev-meta">${e.stops} stops left · finish `+
+    `${e.finish?'<span class="ok">OK</span>':'<span class="bad">NO</span>'}</div></div></div>`;
+}
 function renderEventLog(){
   const log=$('evLog'); if(!log) return;
-  if(!eventLog.length){ log.innerHTML='<p class="note" style="margin:6px 2px">No events yet — pit stops, weather and incidents log here.</p>'; return; }
-  log.innerHTML = eventLog.map(e=>{
-    const {k,ic}=evKind(e.reason);
-    return `<div class="ev-item ${k}"><span class="ev-ic">${ic}</span>`+
-      `<div class="ev-body"><div class="ev-row1"><span class="ev-t">L${e.lap}</span>`+
-      `<span class="ev-reason">${e.reason}</span></div>`+
-      `<div class="ev-meta">${e.stops} stops left · finish `+
-      `${e.finish?'<span class="ok">OK</span>':'<span class="bad">NO</span>'}</div></div></div>`;
-  }).reverse().join('');
+  const n=eventLog.length;
+  const cnt=$('evCount'); if(cnt){ cnt.textContent=n; cnt.style.display=n?'':'none'; }
+  const mc=$('evModalCount'); if(mc) mc.textContent=`${n} event${n===1?'':'s'}`;
+  if(!n){
+    const empty='<p class="note" style="margin:6px 2px">No events yet — pit stops, weather and incidents log here.</p>';
+    log.innerHTML=empty; const full=$('evLogFull'); if(full) full.innerHTML=empty; return;
+  }
+  const items = eventLog.map(evItemHtml).reverse();
+  // inline panel shows the most recent few (preview); modal shows all.
+  log.innerHTML = items.slice(0, 6).join('');
+  const full=$('evLogFull'); if(full) full.innerHTML = items.join('');
 }
+function openEvents(){ renderEventLog(); $('evModal').classList.add('open'); }
+function closeEvents(){ $('evModal').classList.remove('open'); }
 function logEvent(reason){
   const futureStops = currentPlan.stints.filter(s=> s.in_lap > state.laps_done).length;
   const m = Engine.liveMetrics(cfg, {...state, remaining_stops:futureStops}, currentPlan, wx);
