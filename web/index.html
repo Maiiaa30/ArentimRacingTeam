@@ -43,6 +43,7 @@
     <span class="wx-title">WEATHER</span>
     <div class="wx-wrap">
       <div class="wx-bar" id="wxBar"></div>
+      <div class="wx-tip" id="wxTip"></div>
       <div class="wx-ticks" id="wxTicks"></div>
     </div>
     <div class="wx-label" id="wxLabel">—</div>
@@ -55,7 +56,7 @@
       <div class="plan-stats" id="planStats"></div>
       <div class="tbl-scroll">
         <table>
-          <thead><tr><th>#</th><th>Drv</th><th>In-lap</th><th>Tire</th><th>Act</th><th>Fuel</th><th>Laps</th></tr></thead>
+          <thead><tr><th>#</th><th>Drv</th><th>Lap</th><th>Clock</th><th>Tire</th><th>Act</th><th>Fuel</th><th>Laps</th><th>Stint</th></tr></thead>
           <tbody id="plan"></tbody>
         </table>
       </div>
@@ -63,7 +64,7 @@
     </div>
 
     <!-- status + tires + events -->
-    <div class="grid" style="gap:inherit">
+    <div class="grid rightcol">
       <div class="panel">
         <h2>Status</h2>
         <div class="kv"><span class="k">On track</span><span class="v" id="driver">—</span></div>
@@ -83,7 +84,7 @@
         <div class="kv"><span class="k">Laps on set</span><span class="v" id="tireLaps">—</span></div>
         <div class="kv"><span class="k">Wear-out in</span><span class="v" id="wearOut">—</span></div>
       </div>
-      <div class="panel">
+      <div class="panel evpanel">
         <h2>Events</h2>
         <div class="btns">
           <button class="alert" onclick="ev('rain_now')">Rain NOW</button>
@@ -282,13 +283,19 @@ function render(){
   $('tireNote').style.color = over?'var(--bad)':'var(--dim)';
 
   const tb=$('plan'); tb.innerHTML='';
+  const mmss=s=>{s=Math.max(0,s|0);return `${(s/60|0)}:${String(s%60).padStart(2,'0')}`};
   plan.stints.forEach((s,i)=>{
+    const next = plan.stints[i+1];
+    const end = next ? next.in_time_s : plan.finish_time_s;
+    const stintDur = Math.max(0, end - s.in_time_s);
     const tr=document.createElement('tr');
     tr.className = i<activeIdx ? 'done' : i===activeIdx ? 'active' : '';
     tr.innerHTML=`<td>${s.idx+1}</td><td>${s.driver}</td><td>${s.in_lap}</td>`+
+      `<td class="dim">${hms(s.in_time_s)}</td>`+
       `<td><span class="tire ${s.tire_compound}">${s.tire_compound.toUpperCase()}</span></td>`+
       `<td class="act ${s.tire_action}">${s.tire_action}</td>`+
-      `<td>${s.fuel_load.toFixed(1)}</td><td>${s.target_laps}</td>`;
+      `<td>${s.fuel_load.toFixed(1)}</td><td>${s.target_laps}</td>`+
+      `<td class="dim">${mmss(stintDur)}</td>`;
     tb.appendChild(tr);
   });
   // strategy stats
@@ -340,6 +347,24 @@ function renderWxStrip(){
   }
   $('wxLabel').textContent = label;
   $('wxLabel').className = 'wx-label' + (nowWet?' wet':'');
+}
+
+// hover the weather bar → tooltip with the condition at that time
+function wireWxHover(){
+  const bar = $('wxBar'), tip = $('wxTip'), wrap = bar.parentElement;
+  if(!bar || bar._wired) return; bar._wired = true;
+  bar.addEventListener('mousemove', e => {
+    const r = bar.getBoundingClientRect();
+    const pct = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    const t = pct * (cfg.duration_s || 1);
+    const c = Engine.conditionAt(wx, t);
+    const wet = c.condition==='wet' || c.wetness>0;
+    tip.innerHTML = `<b>${hms(t)}</b> · ${wet?('WET'+(c.wetness?` ${Math.round(c.wetness*100)}%`:'')):'DRY'}`;
+    tip.className = 'wx-tip show ' + (wet?'wet':'dry');
+    const x = Math.min(wrap.clientWidth - 10, Math.max(tip.offsetWidth/2+2, e.clientX - wrap.getBoundingClientRect().left));
+    tip.style.left = x + 'px';
+  });
+  bar.addEventListener('mouseleave', () => { tip.className = 'wx-tip'; });
 }
 
 // ---- damage detail modal ----
@@ -735,6 +760,7 @@ PitDB.onState(s => {
 render();
 updateConn();
 renderEventLog();
+wireWxHover();
 </script>
 </body>
 </html>

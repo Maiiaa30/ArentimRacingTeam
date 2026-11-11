@@ -41,13 +41,22 @@ header::before{content:"";position:absolute;left:0;top:0;right:0;height:2px;
   flex:1;min-height:0;display:flex;flex-direction:column;gap:clamp(10px,1.5vw,16px)}
 .grid{display:grid;gap:clamp(10px,1.5vw,16px)}
 .big3{grid-template-columns:repeat(3,1fr);flex:0 0 auto}
-.mid{grid-template-columns:1.7fr 1fr;flex:1;min-height:0;align-items:start}
-.mid > .grid{grid-template-rows:auto auto auto}
+.mid{grid-template-columns:1.7fr 1.05fr;flex:1;min-height:0;align-items:start}
+.rightcol{grid-template-columns:1fr 1fr;align-content:start}
+.rightcol .evpanel{grid-column:1 / -1}
 
 /* ---- weather timeline strip ---- */
 .wx-strip{display:flex;align-items:center;gap:12px;flex:0 0 auto}
 .wx-title{font-size:10px;letter-spacing:2px;color:var(--mut);font-weight:700;min-width:58px}
-.wx-wrap{flex:1;min-width:0}
+.wx-wrap{flex:1;min-width:0;position:relative}
+.wx-bar{cursor:crosshair}
+.wx-tip{position:absolute;top:-30px;transform:translateX(-50%);padding:3px 8px;border-radius:6px;
+  font-family:var(--mono);font-size:11px;white-space:nowrap;pointer-events:none;opacity:0;
+  transition:opacity .1s;border:1px solid var(--line2);background:#0c1017;z-index:5}
+.wx-tip.show{opacity:1}
+.wx-tip.wet{color:#6fc4ff;border-color:#1c3a52}
+.wx-tip.dry{color:#7fb06a;border-color:#22311b}
+.wx-tip b{color:var(--txt)}
 .wx-bar{position:relative;display:flex;height:22px;border-radius:7px;overflow:hidden;
   border:1px solid var(--line2);background:#0c0f15}
 .wx-seg{display:flex;align-items:center;justify-content:center;min-width:0;overflow:hidden;
@@ -259,7 +268,18 @@ label.fld{display:flex;justify-content:space-between;align-items:center;gap:10px
   .wrap{flex:0 1 auto}
   .mid{grid-template-columns:1fr;flex:0 1 auto}
   .mid > .panel{overflow:visible}
-  .tbl-scroll{overflow:visible}
+  .tbl-scroll{overflow:auto}
+}
+@media(max-width:620px){ .rightcol{grid-template-columns:1fr} }
+/* short screens (e.g. 768-tall laptops): compact to reduce scrolling */
+@media(min-width:901px) and (max-height:860px){
+  .wrap{padding:10px clamp(12px,2vw,20px);gap:9px}
+  .big3 .stat{padding:12px 14px}
+  .big3 .val{font-size:clamp(30px,4vw,44px)}
+  .big3 .stat .sub{display:none}
+  .tbl-scroll{max-height:min(38vh,320px)}
+  .ev-log{max-height:72px}
+  .plan-stats{margin-bottom:9px}
 }
 @media(max-width:560px){
   .big3{grid-template-columns:1fr} .stat{padding:14px 10px}
