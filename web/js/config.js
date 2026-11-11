@@ -41,7 +41,12 @@ window.RACE_CONFIG = {
     severe_pct: 20,            // category % that counts as severe (REPAIR)
     susp_critical: 25,         // suspension % that forces a pit (REPAIR_NOW)
     repair_fallback_s: 30      // used only if LMU repair_s is missing
-  }
+  },
+
+  // --- access gate ---  SOFT shared passcode (see js/gate.js header).
+  // "" = no gate. This is a convenience lock for the team, NOT real security
+  // (the value is in client JS). Real protection = Supabase passcode + host auth.
+  access_passcode: ""          // set a shared word to require it on load
 };
 
 // Real driver names — swap these in (you said you'll tell me how later).
