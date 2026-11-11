@@ -28,8 +28,17 @@ window.RACE_CONFIG = {
   wet_fuel_factor: 1.0,        // fuel/lap multiplier in wet
 
   // --- strategy ---
-  optimize_target: "fewest_stops" // "fewest_stops" | "fastest" | "safest" (operator picks)
+  optimize_target: "fewest_stops", // "fewest_stops" | "fastest" | "safest" (operator picks)
+
+  // --- car / class ---
+  car_class: "GT3",            // "GT3" | "Hypercar"
+  energy_mode: "fuel",         // "fuel" (GT3) | "ve" (Hypercar virtual energy)
+  ve_max: 100,                 // Virtual Energy budget (%) — only if energy_mode "ve"
+  ve_per_lap: 1.6              // VE % used per lap — validate in-game
 };
+
+// Real driver names — swap these in (you said you'll tell me how later).
+window.DRIVERS = ["D1", "D2", "D3", "D4"];
 
 // Weather timeline — pulled from game later; manual for now.
 // Each segment: { start_s, condition: "dry"|"wet", wetness: 0..1 }

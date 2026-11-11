@@ -8,18 +8,30 @@ LMU + rF2 share the same engine. Telemetry comes from the **rF2 Shared Memory Ma
 Plugin** (DLL dropped in the game's `Plugins/` folder, enabled in config). A Python
 reader (`pyRfactor2SharedMemory`) reads shared memory and pushes to Supabase.
 
-## Validate FIRST (before trusting it)
+## Field map — validate FIRST (confirm each updates while driving)
 
-Run a reader locally and confirm you can SEE these fields update while driving:
+| Dashboard field | Shared-memory source (rF2/LMU) | Status |
+|---|---|---|
+| Fuel (liters)        | `mFuel`                                   | critical — confirm |
+| Last lap / best lap  | `mLastLapTime` / `mBestLapTime`           | should exist |
+| Laps done            | `mTotalLaps`                              | should exist |
+| Driver + swap        | `mDriverName` / `mControl`                | should exist |
+| Pit detection        | `mInPits` / `mPitState`                   | should exist |
+| Position             | `mPlace` (overall + in-class)             | should exist |
+| Gap ahead / behind   | `mTimeBehindNext` / leader deltas         | confirm |
+| Damage               | `mDentSeverity[8]` / `mDetached` / aero   | partial — confirm |
+| Penalties            | `mNumPenalties`                           | confirm |
+| Tire wear            | `mWear` per tire                          | confirm |
+| Weather now          | rain / track wetness fields               | confirm |
+| Weather forecast     | timeline / forecast                       | UNCONFIRMED in LMU |
+| Virtual Energy (VE)  | `mVirtualEnergy` (Hypercar only)          | confirm — CrewChief reads it, so likely present |
 
-- `mFuel` — current fuel (liters)         ← critical
-- `mLastLapTime`, `mTotalLaps`            ← lap pace + count
-- `mDriverName`, `mControl`               ← driver + swap detection
-- `mInPits`, `mPitState`                  ← pit detection
-- rain / track wetness fields             ← weather now
-- weather forecast / timeline             ← UNCONFIRMED LMU exposes this
+GT3 (our race) uses fuel liters, not VE. Any missing field → manual entry in the
+dashboard / sim feeder.
 
-If a field is missing, it falls back to manual entry in the dashboard / sim panel.
+## App-derived (no telemetry needed)
+Last pit lap, stint time, laps on current tire set, driver totals, fuel/lap rolling,
+delta-to-plan — all computed by the dashboard from the stream above.
 
 ## Driver-swap continuity
 

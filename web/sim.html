@@ -30,6 +30,15 @@
     <label class="fld">Driver
       <select id="drv" onchange="upd()"><option>D1</option><option>D2</option><option>D3</option><option>D4</option></select>
     </label>
+    <label class="fld">Position <input type="number" id="pos" value="4" oninput="upd()"></label>
+    <label class="fld">Gap ahead (s) <input type="number" step="0.1" id="ga" value="3.2" oninput="upd()"></label>
+    <label class="fld">Gap behind (s) <input type="number" step="0.1" id="gb" value="5.8" oninput="upd()"></label>
+    <label class="fld">Last lap (s) <input type="number" step="0.001" id="ll" value="95.42" oninput="upd()"></label>
+    <label class="fld">Best lap (s) <input type="number" step="0.001" id="bl" value="94.18" oninput="upd()"></label>
+    <label class="fld">Damage (%) <input type="number" id="dmg" value="0" oninput="upd()"></label>
+    <label class="fld">Penalties <input type="number" id="pen" value="0" oninput="upd()"></label>
+    <label class="fld">Tire wear (%) <input type="number" id="tw" value="18" oninput="upd()"></label>
+    <label class="fld">Laps on set <input type="number" id="los" value="13" oninput="upd()"></label>
     <div class="btns">
       <button onclick="lapTick()">+1 Lap</button>
       <button onclick="pit()">Pit stop</button>
@@ -48,14 +57,18 @@
 function state(){
   return {
     fuel_now:+fuel.value, avg_lap_live:+lap.value, laps_done:+laps.value,
-    stint_lap:+slap.value, elapsed_s:+el.value, weather_now:wx.value, driver:drv.value,
+    stint_lap:+slap.value, elapsed_s:+el.value, weather_now:wx.value, current_driver:drv.value,
+    position:+pos.value, gap_ahead_s:+ga.value, gap_behind_s:+gb.value,
+    last_lap_s:+ll.value, best_lap_s:+bl.value, damage_pct:+dmg.value, penalties:+pen.value,
+    tire_wear_pct:+tw.value, laps_on_tires:+los.value,
     updated_at:new Date().toISOString()
   };
 }
 function upd(){ out.textContent = JSON.stringify(state(), null, 2); /* PitDB.pushState(state()) later */ }
-function lapTick(){ laps.value=+laps.value+1; slap.value=+slap.value+1;
+function lapTick(){ laps.value=+laps.value+1; slap.value=+slap.value+1; los.value=+los.value+1;
   el.value=+el.value+ +lap.value; fuel.value=Math.max(0,+fuel.value-RACE_CONFIG.fuel_per_lap); upd(); }
-function pit(){ slap.value=0; fuel.value=RACE_CONFIG.tank_cap; el.value=+el.value+RACE_CONFIG.pit_loss_s; upd(); }
+function pit(){ slap.value=0; los.value=0; tw.value=0; fuel.value=RACE_CONFIG.tank_cap;
+  el.value=+el.value+RACE_CONFIG.pit_loss_s; upd(); }
 upd();
 </script>
 </body>

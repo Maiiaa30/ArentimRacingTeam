@@ -39,7 +39,21 @@ header::before{content:"";position:absolute;left:0;top:0;right:0;height:2px;
 .big3{grid-template-columns:repeat(3,1fr);flex:0 0 auto}
 .mid{grid-template-columns:1.7fr 1fr;flex:1;min-height:0}
 .mid > .panel{min-height:0}
-.mid > .grid{min-height:0;grid-template-rows:auto auto 1fr}
+.mid > .grid{min-height:0;grid-template-rows:auto auto auto;overflow:auto}
+
+/* ---- mini-stat strip (race info) ---- */
+.strip{display:grid;grid-template-columns:repeat(8,1fr);gap:clamp(8px,1vw,12px);flex:0 0 auto}
+.mini{background:linear-gradient(180deg,var(--panel),var(--panel2));
+  border:1px solid var(--line);border-radius:10px;padding:9px 12px;
+  display:flex;flex-direction:column;gap:2px;min-width:0}
+.mini .k{font-size:10px;letter-spacing:1.5px;color:var(--mut);text-transform:uppercase;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini .v{font-family:var(--mono);font-weight:700;font-variant-numeric:tabular-nums;
+  font-size:clamp(15px,1.5vw,20px);white-space:nowrap}
+.mini .v.pos{color:var(--txt)} .mini .v.gap-a{color:#7fe0a0} .mini .v.gap-b{color:#e0a07f}
+.mini .v.ok{color:var(--ok)} .mini .v.warn{color:var(--warn)} .mini .v.bad{color:var(--bad)}
+@media(max-width:1100px){ .strip{grid-template-columns:repeat(4,1fr)} }
+@media(max-width:560px){ .strip{grid-template-columns:repeat(2,1fr)} }
 
 /* ---- panels ---- */
 .panel{background:linear-gradient(180deg,var(--panel),var(--panel2));
@@ -53,7 +67,7 @@ header::before{content:"";position:absolute;left:0;top:0;right:0;height:2px;
 
 /* ---- stat tile ---- */
 .stat{text-align:center;align-items:center;justify-content:center;
-  padding:clamp(10px,1.4vw,18px) 10px;gap:2px}
+  padding:clamp(8px,1vw,13px) 10px;gap:2px}
 .stat .label{font-size:11px;letter-spacing:2px;color:var(--mut);text-transform:uppercase}
 .stat .val{font-family:var(--mono);font-weight:700;font-variant-numeric:tabular-nums;
   font-size:clamp(34px,4.6vw,58px);line-height:1;margin-top:4px;letter-spacing:-1px}

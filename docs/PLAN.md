@@ -30,8 +30,11 @@ BOTH:          Supabase (Postgres + realtime) → dashboard (static SPA, your do
 ## Data model (Supabase)
 - `race_config` — duration, pace, fuel, tank, drivers, tire_budget, tire_count_mode,
   tire_life, pit_loss, wet factors, optimize_target.
-- `race_state` — elapsed, laps_done, fuel_now, last/avg lap, driver, stint_lap, tires_used,
-  weather_now, flag, active_pc, updated_at.
+- `race_state` — elapsed, laps_done, fuel_now, last/avg/best lap, current_driver, stint_lap,
+  stint_time_s, tires_used, tire_wear_pct, laps_on_tires, last_pit_lap, position,
+  gap_ahead_s, gap_behind_s, damage_pct, penalties, weather_now, flag, active_pc, updated_at.
+- Car class: GT3 (fuel liters). Hypercar support kept via `energy_mode:"ve"` + `ve_*` config.
+  See `bridge/README.md` for the telemetry→field map and what needs validation.
 - `weather_timeline` — [{start_s, condition, wetness}].
 - `plan_stints` — idx, status, driver, in_lap, in_time, compound, action(new|stay), fuel, laps.
 - `lap_log` — lap_no, lap_s, fuel_at_lap, driver, weather, ts.

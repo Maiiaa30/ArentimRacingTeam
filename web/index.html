@@ -23,6 +23,18 @@
     <div class="panel stat"><div class="label">Stint lap</div><div class="val" id="stint">—</div><div class="sub" id="stintSub">&nbsp;</div></div>
   </div>
 
+  <!-- race info strip -->
+  <div class="strip">
+    <div class="mini"><span class="k">Position</span><span class="v pos" id="pos">—</span></div>
+    <div class="mini"><span class="k">Gap ahead</span><span class="v gap-a" id="gapA">—</span></div>
+    <div class="mini"><span class="k">Gap behind</span><span class="v gap-b" id="gapB">—</span></div>
+    <div class="mini"><span class="k">Last lap</span><span class="v" id="lastLap">—</span></div>
+    <div class="mini"><span class="k">Best lap</span><span class="v" id="bestLap">—</span></div>
+    <div class="mini"><span class="k">Last pit (lap)</span><span class="v" id="lastPit">—</span></div>
+    <div class="mini"><span class="k">Damage</span><span class="v" id="damage">—</span></div>
+    <div class="mini"><span class="k">Penalties</span><span class="v" id="pen">—</span></div>
+  </div>
+
   <div class="grid mid">
     <!-- plan -->
     <div class="panel">
@@ -40,6 +52,8 @@
     <div class="grid" style="gap:inherit">
       <div class="panel">
         <h2>Status</h2>
+        <div class="kv"><span class="k">On track</span><span class="v" id="driver">—</span></div>
+        <div class="kv"><span class="k">Stint time</span><span class="v" id="stintTime">—</span></div>
         <div class="kv"><span class="k">Laps left</span><span class="v" id="lapsLeft">—</span></div>
         <div class="kv"><span class="k">Stops planned</span><span class="v" id="stops">—</span></div>
         <div class="kv"><span class="k">Avg lap</span><span class="v" id="avg">—</span></div>
@@ -50,6 +64,8 @@
         <div class="kv"><span class="k">Used / budget</span><span class="v" id="tireCount">—</span></div>
         <div class="bar" id="tireBar"><i style="width:0%"></i></div>
         <div class="note" id="tireNote"></div>
+        <div class="kv"><span class="k">Current set wear</span><span class="v" id="tireWear">—</span></div>
+        <div class="kv"><span class="k">Laps on set</span><span class="v" id="tireLaps">—</span></div>
       </div>
       <div class="panel">
         <h2>Events</h2>
@@ -72,10 +88,17 @@ const cfg = window.RACE_CONFIG, wx = window.WEATHER_TIMELINE;
 document.getElementById('target').textContent = cfg.optimize_target.replace('_',' ');
 
 let state = { fuel_now:cfg.tank_cap, laps_done:0, stint_lap:0, avg_lap_live:cfg.avg_lap_s,
-  elapsed_s:0, remaining_stops:null, driver_idx:0, tires_used:0 };
+  elapsed_s:0, remaining_stops:null, driver_idx:0, tires_used:0,
+  // extra race data (telemetry/app-fed later; placeholders for now)
+  // DEMO placeholders — real values come from sim feeder / telemetry
+  current_driver:(window.DRIVERS||['D1'])[0], stint_time_s:1240,
+  position:4, gap_ahead_s:3.2, gap_behind_s:5.8,
+  last_lap_s:95.42, best_lap_s:94.18, last_pit_lap:null,
+  damage_pct:0, penalties:0, tire_wear_pct:18, laps_on_tires:13 };
 
 const $=id=>document.getElementById(id);
 const hms=s=>{s=Math.max(0,s|0);return `${(s/3600|0)}:${String(s/60%60|0).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`};
+const fmtLap=s=>{ if(s==null)return '—'; return s>=60?`${(s/60|0)}:${(s%60).toFixed(3).padStart(6,'0')}`:s.toFixed(3)+'s'; };
 
 function render(){
   const plan = Engine.generatePlan(cfg, wx);
@@ -96,6 +119,24 @@ function render(){
   $('avg').textContent = state.avg_lap_live.toFixed(2)+'s';
   $('finish').innerHTML = `<span class="pill ${m.make_finish?'ok':'bad'}">${m.make_finish?'YES':'NO'}</span>`
     + (m.fuel_deficit>0?` <span class="note" style="margin:0">short ${m.fuel_deficit}L</span>`:'');
+
+  // driver + stint
+  $('driver').textContent = state.current_driver;
+  $('stintTime').textContent = hms(state.stint_time_s);
+  // race info strip
+  $('pos').textContent = state.position ? 'P'+state.position : '—';
+  $('gapA').textContent = state.gap_ahead_s==null ? '—' : '+'+state.gap_ahead_s.toFixed(1)+'s';
+  $('gapB').textContent = state.gap_behind_s==null ? '—' : '-'+state.gap_behind_s.toFixed(1)+'s';
+  $('lastLap').textContent = fmtLap(state.last_lap_s);
+  $('bestLap').textContent = fmtLap(state.best_lap_s);
+  $('lastPit').textContent = state.last_pit_lap==null ? '—' : state.last_pit_lap;
+  const de=$('damage'), dmg=state.damage_pct;
+  de.textContent = dmg>0 ? dmg+'%' : 'OK'; de.className='v '+(dmg===0?'ok':dmg<10?'warn':'bad');
+  const pe=$('pen'); pe.textContent = state.penalties>0 ? state.penalties : 'none';
+  pe.className='v '+(state.penalties>0?'bad':'ok');
+  // tires extra
+  $('tireWear').textContent = state.tire_wear_pct ? state.tire_wear_pct+'%' : '—';
+  $('tireLaps').textContent = state.laps_on_tires || 0;
 
   const over = plan.tires_over_budget, pct=Math.min(100,plan.tires_used/cfg.tire_budget*100);
   $('tireCount').textContent = plan.tires_used+' / '+cfg.tire_budget;
