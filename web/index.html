@@ -71,6 +71,7 @@
     <div class="grid rightcol">
       <div class="panel">
         <h2>Status</h2>
+        <div class="brain" id="brain"></div>
         <div class="nextstop" id="nextStop"></div>
         <div class="kv"><span class="k">On track</span><span class="v" id="driver">—</span></div>
         <div class="kv"><span class="k">Stint left</span><span class="v" id="stintLeft">—</span></div>
@@ -595,6 +596,7 @@ function render(){
     + (margin>=0?` (+${hms(margin)} margin)`:` (${hms(-margin)} OVER race time)`);
 
   renderWxStrip();
+  runBrain();
   if($('dmgModal').classList.contains('open')) renderDamage();
 }
 
@@ -741,6 +743,44 @@ function liveWxTimeline(){
   return tl;
 }
 function regen(){ currentPlan = Engine.regenerate(cfg, liveWxTimeline(), curState(), lockedStints()); }
+
+// ---- Strategy Brain: offline optimizer, surfaced as a live card ----
+// Runs every render (cheap, pure math). From the live state it scores several
+// rest-of-race plans and, if a different line beats holding, offers one-tap Apply.
+let _brain = null;
+function runBrain(){
+  try {
+    _brain = Engine.optimize(cfg, liveWxTimeline(), curState(), lockedStints(), { fuel_now: state.fuel_now });
+  } catch(e){ _brain = null; }
+  renderBrain();
+}
+function renderBrain(){
+  const el = $('brain'); if(!el) return;
+  if(!_brain || !_brain.best){ el.innerHTML=''; el.className='brain'; return; }
+  const b = _brain.best;
+  const improve = b.key !== 'hold' && b.feasible;      // a better line exists
+  const danger  = !b.feasible;                          // nothing clean — warn
+  el.className = 'brain' + (improve?' act':'') + (danger?' warn':'');
+  const tag = danger ? '⚠ STRATEGY BRAIN' : improve ? '◆ STRATEGY BRAIN' : '◆ STRATEGY BRAIN';
+  const applyBtn = improve
+    ? `<button class="brain-apply" onclick="applyBrain()">Apply · ${b.label}</button>` : '';
+  const head = danger ? 'No clean plan' : improve ? b.label : 'Plan is optimal';
+  el.innerHTML =
+    `<div class="brain-top"><span class="brain-tag">${tag}</span></div>`+
+    `<div class="brain-head">${head}</div>`+
+    `<div class="brain-why">${b.reason||''}</div>`+
+    applyBtn;
+}
+function applyBrain(){
+  if(!_brain || !_brain.best || !_brain.best.plan) return;
+  const b = _brain.best;
+  // adopt the recommendation's config overrides so it becomes the new baseline
+  // (otherwise the Brain keeps re-recommending the same line every render).
+  if(b.ov) Object.assign(cfg, b.ov);
+  currentPlan = b.plan;
+  logEvent('Brain → '+b.label);
+  render();
+}
 
 const EV_KEY = 'arentim_pitwall_events';
 let eventLog = [];
