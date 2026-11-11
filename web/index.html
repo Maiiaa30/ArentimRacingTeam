@@ -142,7 +142,7 @@
     <h2>Lap log</h2>
     <div class="btns" style="margin-top:0">
       <button onclick="exportLapCsv()">Export CSV</button>
-      <button onclick="if(confirm('Clear the lap log?')){lapLog=[];renderLapLog();}">Clear</button>
+      <button onclick="if(confirm('Clear the lap log?')){lapLog=[];saveLapLog();renderLapLog();}">Clear</button>
       <span class="chip" id="lapCount">0 laps</span>
       <span class="chip" id="lapBest">best —</span>
     </div>
@@ -469,8 +469,11 @@ function ev(type){
 }
 
 // ---- lap log: one row per completed lap, from the live stream ----
+const LAP_KEY = 'arentim_pitwall_laplog';
 let lapLog = [];
-let _lastLoggedLap = state.laps_done;
+try { const saved = JSON.parse(localStorage.getItem(LAP_KEY)||'[]'); if(Array.isArray(saved)) lapLog = saved; } catch(e){}
+let _lastLoggedLap = lapLog.length ? lapLog[lapLog.length-1].lap : state.laps_done;
+function saveLapLog(){ try { localStorage.setItem(LAP_KEY, JSON.stringify(lapLog)); } catch(e){} }
 function wxNow(){
   if(state.weather_now) return state.weather_now;
   const c = (typeof Engine.conditionAt==='function') ? Engine.conditionAt(wx, state.elapsed_s) : null;
@@ -487,6 +490,7 @@ function captureLap(lapNo){
     wx: wxNow(),
     ts: new Date().toISOString()
   });
+  saveLapLog();
   if(document.getElementById('lapModal').classList.contains('open')) renderLapLog();
 }
 function renderLapLog(){
