@@ -31,7 +31,7 @@
     <div class="mini"><span class="k">Last lap</span><span class="v" id="lastLap">—</span></div>
     <div class="mini"><span class="k">Best lap</span><span class="v" id="bestLap">—</span></div>
     <div class="mini"><span class="k">Last pit (lap)</span><span class="v" id="lastPit">—</span></div>
-    <div class="mini"><span class="k">Damage</span><span class="v" id="damage">—</span></div>
+    <div class="mini clickable" onclick="openDamage()" title="Click for damage detail"><span class="k">Damage ▸</span><span class="v" id="damage">—</span></div>
     <div class="mini"><span class="k">Penalties</span><span class="v" id="pen">—</span></div>
   </div>
 
@@ -80,6 +80,17 @@
   </div>
 </div>
 
+<!-- damage detail modal -->
+<div class="modal-bg" id="dmgModal" onclick="if(event.target===this)closeDamage()">
+  <div class="modal">
+    <button class="x" onclick="closeDamage()">✕</button>
+    <h2>Damage detail</h2>
+    <div class="carwrap"><div id="carSvg"></div></div>
+    <div id="dmgDetails"></div>
+    <div id="dmgRec" class="rec"></div>
+  </div>
+</div>
+
 <script src="js/config.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/supabase.js"></script>
@@ -94,7 +105,14 @@ let state = { fuel_now:cfg.tank_cap, laps_done:0, stint_lap:0, avg_lap_live:cfg.
   current_driver:(window.DRIVERS||['D1'])[0], stint_time_s:1240,
   position:4, gap_ahead_s:3.2, gap_behind_s:5.8,
   last_lap_s:95.42, best_lap_s:94.18, last_pit_lap:null,
-  damage_pct:0, penalties:0, tire_wear_pct:18, laps_on_tires:13 };
+  penalties:0, tire_wear_pct:18, laps_on_tires:13,
+  // damage detail: dent[8] in zone_labels order, wheels[4] = FL,FR,RL,RR
+  dent:[1,2,0,0,0,0,0,0],
+  wheels:[ {wear:0.18,brakeTemp:410,flat:false,detached:false},
+           {wear:0.22,brakeTemp:520,flat:false,detached:false},
+           {wear:0.15,brakeTemp:395,flat:false,detached:false},
+           {wear:0.17,brakeTemp:405,flat:false,detached:false} ],
+  last_impact_mag:14.2, last_impact_ago_s:35, accum_impact:40 };
 
 const $=id=>document.getElementById(id);
 const hms=s=>{s=Math.max(0,s|0);return `${(s/3600|0)}:${String(s/60%60|0).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`};
@@ -130,8 +148,10 @@ function render(){
   $('lastLap').textContent = fmtLap(state.last_lap_s);
   $('bestLap').textContent = fmtLap(state.best_lap_s);
   $('lastPit').textContent = state.last_pit_lap==null ? '—' : state.last_pit_lap;
-  const de=$('damage'), dmg=state.damage_pct;
-  de.textContent = dmg>0 ? dmg+'%' : 'OK'; de.className='v '+(dmg===0?'ok':dmg<10?'warn':'bad');
+  const dsum = Engine.damageSummary(cfg, state);
+  const de=$('damage');
+  de.textContent = dsum.mandatory ? 'PIT!' : (dsum.body_pct>0 ? dsum.body_pct+'%' : 'OK');
+  de.className='v '+(dsum.mandatory||dsum.severe ? 'bad' : dsum.body_pct===0 ? 'ok' : 'warn');
   const pe=$('pen'); pe.textContent = state.penalties>0 ? state.penalties : 'none';
   pe.className='v '+(state.penalties>0?'bad':'ok');
   // tires extra
@@ -154,7 +174,52 @@ function render(){
     tb.appendChild(tr);
   });
   $('planSummary').textContent = `${plan.total_laps} laps · ${plan.stops} stops · finish est ${hms(plan.finish_time_s)}`;
+
+  if($('dmgModal').classList.contains('open')) renderDamage();
 }
+
+// ---- damage detail modal ----
+function renderDamage(){
+  const plan = Engine.generatePlan(cfg, wx);
+  const dsum = Engine.damageSummary(cfg, state);
+  const penalty = Math.max(0, (state.last_lap_s||0) - (state.best_lap_s||0)); // measured proxy
+  const lapsRem = plan.total_laps - state.laps_done;
+  const pittingAnyway = (Engine.liveMetrics(cfg,{...state,remaining_stops:plan.stops},plan,wx).pit_in_laps <= 1);
+  const rec = Engine.repairDecision(cfg, state, penalty, lapsRem, {pitting_anyway:pittingAnyway});
+
+  // car diagram: 8 zone chips (zone_labels order) + 4 wheels (FL,FR,RL,RR)
+  const zc=[[95,16],[170,66],[190,162],[170,258],[95,308],[20,258],[0,162],[20,66]];
+  const sevFill=s=> s>=2?'#ff3b30' : s>=1?'#f2b600' : '#273040';
+  const chips=state.dent.map((s,i)=>`<rect x="${zc[i][0]}" y="${zc[i][1]}" width="34" height="20" rx="5" fill="${sevFill(s)}" stroke="#0a0d12" stroke-width="1"/>`).join('');
+  const wp=[[44,96],[136,96],[44,238],[136,238]];
+  const wFill=w=> (w.flat||w.detached)?'#ff3b30' : w.wear>=0.85?'#ff3b30' : w.wear>=0.6?'#f2b600' : '#2ec96b';
+  const wheels=state.wheels.map((w,i)=>`<rect x="${wp[i][0]}" y="${wp[i][1]}" width="26" height="46" rx="5" fill="${wFill(w)}" stroke="#0a0d12" stroke-width="1"/>`).join('');
+  $('carSvg').innerHTML=`<svg viewBox="0 0 224 344" width="190" height="292">
+    <rect x="58" y="42" width="108" height="260" rx="34" fill="#232a36" stroke="#2d3745" stroke-width="2"/>
+    <rect x="76" y="62" width="72" height="58" rx="14" fill="#171c25"/>
+    <rect x="76" y="150" width="72" height="90" rx="10" fill="#171c25"/>
+    ${wheels}${chips}</svg>`;
+
+  const wn=['FL','FR','RL','RR'];
+  const wt=state.wheels.map((w,i)=>`<div class="kv"><span class="k">${wn[i]}</span><span class="v">`+
+    `wear ${Math.round(w.wear*100)}% · ${Math.round(w.brakeTemp)}°C`+
+    `${w.flat?' · FLAT':''}${w.detached?' · OFF':''}</span></div>`).join('');
+  $('dmgDetails').innerHTML=
+    `<div class="kv"><span class="k">Body damage</span><span class="v">${dsum.body_pct}%</span></div>`+
+    `<div class="kv"><span class="k">Last impact</span><span class="v">${state.last_impact_mag} · ${state.last_impact_ago_s}s ago</span></div>`+
+    `<div class="kv"><span class="k">Accumulated hits</span><span class="v">${state.accum_impact}</span></div>`+
+    `<div class="kv"><span class="k">Measured penalty</span><span class="v">${penalty.toFixed(2)}s/lap</span></div>`+
+    wt;
+
+  const map={REPAIR_NOW:['bad','⚠ PIT NOW — mandatory'],REPAIR:['warn','REPAIR recommended'],STAY_OUT:['ok','STAY OUT']};
+  const [cls,label]=map[rec.recommendation];
+  const re=$('dmgRec'); re.className='rec '+cls;
+  re.innerHTML=`<b>${label}</b><br>repair ~${rec.repair_time_s}s · stay-out cost ${rec.stay_out_cost_s}s`+
+    (rec.recommendation!=='STAY_OUT' && !rec.mandatory ? ` · <b>saves ${rec.saves_s}s</b>` : '')+
+    (pittingAnyway?` · <span class="note" style="margin:0">(pitting anyway)</span>`:'');
+}
+function openDamage(){ renderDamage(); $('dmgModal').classList.add('open'); }
+function closeDamage(){ $('dmgModal').classList.remove('open'); }
 
 function ev(type){
   if(type==='rain_now'){ wx.push({start_s:state.elapsed_s,condition:'wet',wetness:0.6}); }
