@@ -7,12 +7,14 @@ window.RACE_CONFIG = {
   n_drivers: 4,
   // Francisco starts (index 0). Rui & Helder must never take stint 1.
   driver_names: ["Francisco Coelho", "Diogo Rodrigues", "Rui Garcia", "Helder Marques"],
-  // Agreed DEFAULT rotation (6-stint plan). Francisco starts + runs to the flag;
-  // Diogo brackets the two less-experienced drivers (before S3 and after S4), who
-  // only run the calm mid-race. Any extra stint wraps to Francisco (experienced).
-  // Balance: Francisco 2, Diogo 2, Rui 1, Helder 1.
-  driver_sequence: ["Francisco Coelho", "Diogo Rodrigues", "Rui Garcia",
-                    "Helder Marques", "Diogo Rodrigues", "Francisco Coelho"],
+  // Agreed DEFAULT rotation (8-stint EQUAL-SEAT plan). Everyone drives the same —
+  // 2 stints each, ~equal minutes, because this is for fun + first 6h finish.
+  // Francisco bookends (starts + takes the flag: the cold-tyre start and the
+  // traffic-heavy finish, the two riskiest phases) but still only 2 stints.
+  // The other three split the calm middle 2 stints each. Rui/Helder never start.
+  // Balance: Francisco 2, Diogo 2, Rui 2, Helder 2.
+  driver_sequence: ["Francisco Coelho", "Diogo Rodrigues", "Rui Garcia", "Helder Marques",
+                    "Diogo Rodrigues", "Rui Garcia", "Helder Marques", "Francisco Coelho"],
   cannot_start: ["Rui Garcia", "Helder Marques"],
 
   // --- car / pace (ASSUMED GT3 endurance values — replace with practice data in Setup) ---
@@ -21,6 +23,10 @@ window.RACE_CONFIG = {
   fuel_per_lap: 3.1,           // liters per lap dry      (ASSUMPTION)
   tank_cap: 105,               // liters ~ 33-lap stint   (ASSUMPTION)
   fuel_margin_laps: 1,         // keep this many laps of fuel as safety
+  // Short-fuel cap for the EQUAL-SEAT plan: pit at ~24 laps (~45 min) instead of
+  // running the tank dry (~32). Makes 8 even stints so all 4 drivers get the same
+  // time. Set to 0/remove to go back to fuel-max (fewer stops, uneven split).
+  max_stint_laps: 24,
 
   // --- tires ---
   tire_budget: 20,             // total tires available for the race

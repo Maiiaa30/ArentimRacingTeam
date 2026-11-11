@@ -30,7 +30,9 @@ const Engine = (() => {
     // pit-stop time AND the slower wet pace. Estimate stops from fuel range,
     // subtract their time, then walk the weather timeline lap by lap.
     const dryCond = { condition: "dry", wetness: 0 };
-    const stintLaps = Math.max(1, lapsPerTank(cfg, dryCond));
+    let stintLaps = Math.max(1, lapsPerTank(cfg, dryCond));
+    // Short-fuel cap (equal-stint strategy) means more, shorter stints = more stops.
+    if (cfg.max_stint_laps) stintLaps = Math.min(stintLaps, cfg.max_stint_laps);
     const rawLaps = cfg.duration_s / cfg.avg_lap_s;
     const estStops = Math.max(0, Math.ceil(rawLaps / stintLaps) - 1);
     const racing_s = Math.max(0, cfg.duration_s - estStops * cfg.pit_loss_s);
@@ -75,8 +77,10 @@ const Engine = (() => {
 
       const tireLaps = cfg.tire_life_laps[compound] || maxFuelLaps;
 
-      // stint length limited by fuel, tires, and race end
+      // stint length limited by fuel, tires, race end — and an optional short-fuel
+      // cap (equal-stint plan: pit early so every driver gets the same seat time).
       let stintLen = Math.min(maxFuelLaps, tireLaps, totalLaps - lap);
+      if (cfg.max_stint_laps) stintLen = Math.min(stintLen, cfg.max_stint_laps);
 
       // tire action: reuse (double-stint) if same compound still has life & budget tight
       let tireAction = "new";
