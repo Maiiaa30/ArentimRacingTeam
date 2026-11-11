@@ -8,45 +8,57 @@
 </head>
 <body>
 <header>
-  <h1>🏁 ARENTIM RACING — PIT WALL</h1>
-  <span class="chip" id="clock">--:--:--</span>
-  <span class="chip" id="wx">dry</span>
-  <span class="chip" id="target">fewest_stops</span>
+  <div class="brand"><span class="t">ARENTIM RACING TEAM</span><span class="s">PIT WALL</span></div>
+  <div class="spacer"></div>
+  <span class="chip clock" id="clock">--:--:--</span>
+  <span class="chip wet" id="wx">DRY</span>
+  <span class="chip tgt" id="target">fewest stops</span>
 </header>
 
 <div class="wrap">
-  <!-- big 3 -->
-  <div class="big3">
-    <div class="card"><div class="label">Fuel laps left</div><div class="val" id="fuelLaps">—</div></div>
-    <div class="card"><div class="label">Pit in (laps)</div><div class="val" id="pitIn">—</div></div>
-    <div class="card"><div class="label">Stint lap</div><div class="val" id="stint">—</div></div>
+  <!-- balanced hero grid: 3 stats -->
+  <div class="grid big3">
+    <div class="panel stat"><div class="label">Fuel laps left</div><div class="val" id="fuelLaps">—</div><div class="sub" id="fuelSub">&nbsp;</div></div>
+    <div class="panel stat" id="pitTile"><div class="label">Pit in — laps</div><div class="val" id="pitIn">—</div><div class="sub" id="pitSub">&nbsp;</div></div>
+    <div class="panel stat"><div class="label">Stint lap</div><div class="val" id="stint">—</div><div class="sub" id="stintSub">&nbsp;</div></div>
   </div>
 
-  <div class="row">
-    <div class="card">
-      <h2>Status</h2>
-      <div id="status"></div>
+  <div class="grid mid">
+    <!-- plan -->
+    <div class="panel">
+      <h2>Race strategy</h2>
+      <table>
+        <thead><tr><th>#</th><th>Drv</th><th>In-lap</th><th>Tire</th><th>Act</th><th>Fuel</th><th>Laps</th></tr></thead>
+        <tbody id="plan"></tbody>
+      </table>
+      <p class="note" id="planSummary"></p>
     </div>
-    <div class="card">
-      <h2>Tires</h2>
-      <div id="tires"></div>
-      <h2 style="margin-top:14px">Events</h2>
-      <div class="btns">
-        <button class="alert" onclick="ev('rain_now')">Rain NOW</button>
-        <button class="alert" onclick="ev('forced_pit')">Forced Pit</button>
-        <button onclick="ev('pace_change')">Pace Change</button>
+
+    <!-- status + tires + events -->
+    <div class="grid" style="gap:inherit">
+      <div class="panel">
+        <h2>Status</h2>
+        <div class="kv"><span class="k">Laps left</span><span class="v" id="lapsLeft">—</span></div>
+        <div class="kv"><span class="k">Stops planned</span><span class="v" id="stops">—</span></div>
+        <div class="kv"><span class="k">Avg lap</span><span class="v" id="avg">—</span></div>
+        <div class="kv"><span class="k">Make finish</span><span id="finish"></span></div>
       </div>
-      <p class="note">Events lock past stints and regenerate the rest of the race.</p>
+      <div class="panel">
+        <h2>Tires</h2>
+        <div class="kv"><span class="k">Used / budget</span><span class="v" id="tireCount">—</span></div>
+        <div class="bar" id="tireBar"><i style="width:0%"></i></div>
+        <div class="note" id="tireNote"></div>
+      </div>
+      <div class="panel">
+        <h2>Events</h2>
+        <div class="btns">
+          <button class="alert" onclick="ev('rain_now')">Rain NOW</button>
+          <button class="alert" onclick="ev('forced_pit')">Forced Pit</button>
+          <button onclick="ev('pace_change')">Pace Change</button>
+        </div>
+        <p class="note">Locks past stints, regenerates the rest of the race.</p>
+      </div>
     </div>
-  </div>
-
-  <div class="card">
-    <h2>Race plan</h2>
-    <table>
-      <thead><tr><th>#</th><th>Driver</th><th>In-lap</th><th>Tire</th><th>Action</th><th>Fuel</th><th>Laps</th></tr></thead>
-      <tbody id="plan"></tbody>
-    </table>
-    <p class="note" id="planSummary"></p>
   </div>
 </div>
 
@@ -54,55 +66,58 @@
 <script src="js/engine.js"></script>
 <script src="js/supabase.js"></script>
 <script>
-// Dev render: build a plan from defaults and show it. Live data wired in phase 3.
 const cfg = window.RACE_CONFIG, wx = window.WEATHER_TIMELINE;
-document.getElementById('target').textContent = cfg.optimize_target;
+document.getElementById('target').textContent = cfg.optimize_target.replace('_',' ');
 
-let state = {
-  fuel_now: cfg.tank_cap, laps_done: 0, stint_lap: 0,
-  avg_lap_live: cfg.avg_lap_s, elapsed_s: 0, remaining_stops: null, driver_idx: 0, tires_used: 0
-};
+let state = { fuel_now:cfg.tank_cap, laps_done:0, stint_lap:0, avg_lap_live:cfg.avg_lap_s,
+  elapsed_s:0, remaining_stops:null, driver_idx:0, tires_used:0 };
 
-function hms(s){s=Math.max(0,s|0);return `${(s/3600|0)}:${String(s/60%60|0).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`}
+const $=id=>document.getElementById(id);
+const hms=s=>{s=Math.max(0,s|0);return `${(s/3600|0)}:${String(s/60%60|0).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`};
 
 function render(){
   const plan = Engine.generatePlan(cfg, wx);
-  const m = Engine.liveMetrics(cfg, {...state, remaining_stops: plan.stops}, plan, wx);
+  const m = Engine.liveMetrics(cfg, {...state, remaining_stops:plan.stops}, plan, wx);
 
-  document.getElementById('clock').textContent = hms(cfg.duration_s - state.elapsed_s);
-  document.getElementById('wx').textContent = m.weather_now;
-  document.getElementById('fuelLaps').textContent = m.fuel_laps_left;
-  document.getElementById('pitIn').textContent = m.pit_in_laps;
-  document.getElementById('stint').textContent = state.stint_lap + ' / ' + (plan.stints[0]?.target_laps ?? '—');
+  $('clock').textContent = hms(cfg.duration_s - state.elapsed_s);
+  const wet = m.weather_now==='wet';
+  $('wx').textContent = m.weather_now.toUpperCase(); $('wx').classList.toggle('wet',wet);
+  $('fuelLaps').textContent = m.fuel_laps_left;
+  $('pitIn').textContent = m.pit_in_laps;
+  $('pitTile').className = 'panel stat'+(m.pit_in_laps<=1?' crit':m.pit_in_laps<=3?' hot':'');
+  const t0 = plan.stints[0];
+  $('stint').textContent = state.stint_lap; $('stintSub').textContent = 'target '+(t0?.target_laps??'—');
+  $('fuelSub').textContent = state.fuel_now.toFixed(1)+' L';
 
-  document.getElementById('status').innerHTML =
-    `Laps left: <b>${m.laps_left}</b><br>Stops planned: <b>${plan.stops}</b><br>`+
-    `Make finish: <b class="${m.make_finish?'ok':'bad'}">${m.make_finish?'YES':'NO'}</b>`+
-    (m.fuel_deficit>0?` <span class="bad">(short ${m.fuel_deficit} L)</span>`:'');
+  $('lapsLeft').textContent = m.laps_left;
+  $('stops').textContent = plan.stops;
+  $('avg').textContent = state.avg_lap_live.toFixed(2)+'s';
+  $('finish').innerHTML = `<span class="pill ${m.make_finish?'ok':'bad'}">${m.make_finish?'YES':'NO'}</span>`
+    + (m.fuel_deficit>0?` <span class="note" style="margin:0">short ${m.fuel_deficit}L</span>`:'');
 
-  const over = plan.tires_over_budget;
-  document.getElementById('tires').innerHTML =
-    `Used: <b class="${over?'bad':'ok'}">${plan.tires_used}</b> / ${cfg.tire_budget}`+
-    (over?` <span class="bad">OVER BUDGET — must double-stint more</span>`:'');
+  const over = plan.tires_over_budget, pct=Math.min(100,plan.tires_used/cfg.tire_budget*100);
+  $('tireCount').textContent = plan.tires_used+' / '+cfg.tire_budget;
+  $('tireBar').className='bar'+(over?' over':''); $('tireBar').firstElementChild.style.width=pct+'%';
+  $('tireNote').textContent = over?'OVER BUDGET — must double-stint more':'within budget';
+  $('tireNote').style.color = over?'var(--bad)':'var(--dim)';
 
-  const tb = document.getElementById('plan'); tb.innerHTML='';
+  const tb=$('plan'); tb.innerHTML='';
   plan.stints.forEach((s,i)=>{
-    const tr=document.createElement('tr');
-    if(i===0) tr.className='active';
+    const tr=document.createElement('tr'); if(i===0)tr.className='active';
     tr.innerHTML=`<td>${s.idx+1}</td><td>${s.driver}</td><td>${s.in_lap}</td>`+
-      `<td class="${s.tire_compound==='wet'?'wet':''}">${s.tire_compound}</td>`+
-      `<td>${s.tire_action}</td><td>${s.fuel_load.toFixed(1)}</td><td>${s.target_laps}</td>`;
+      `<td><span class="tire ${s.tire_compound}">${s.tire_compound.toUpperCase()}</span></td>`+
+      `<td class="act ${s.tire_action}">${s.tire_action}</td>`+
+      `<td>${s.fuel_load.toFixed(1)}</td><td>${s.target_laps}</td>`;
     tb.appendChild(tr);
   });
-  document.getElementById('planSummary').textContent =
-    `${plan.total_laps} laps · ${plan.stops} stops · finish est ${hms(plan.finish_time_s)}`;
+  $('planSummary').textContent = `${plan.total_laps} laps · ${plan.stops} stops · finish est ${hms(plan.finish_time_s)}`;
 }
 
 function ev(type){
-  if(type==='rain_now'){ wx.push({start_s: state.elapsed_s, condition:'wet', wetness:0.6}); }
-  // forced_pit / pace_change wiring comes in phase 5 (event engine)
-  alert('Event: '+type+' — regenerate logic wires in phase 5. Weather applied for rain.');
+  if(type==='rain_now'){ wx.push({start_s:state.elapsed_s,condition:'wet',wetness:0.6}); }
+  // forced_pit / pace_change → event engine wiring in phase 5
   render();
+  if(type!=='rain_now') alert('Event "'+type+'": regenerate logic lands in phase 5.');
 }
 render();
 </script>

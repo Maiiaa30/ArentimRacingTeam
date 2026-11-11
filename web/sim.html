@@ -8,11 +8,12 @@
 </head>
 <body>
 <header>
-  <h1>🧪 SIM FEEDER — inject fake game data</h1>
-  <span class="chip">dev only</span>
+  <div class="brand"><span class="t">ARENTIM RACING TEAM</span><span class="s">SIM FEEDER · DEV</span></div>
+  <div class="spacer"></div>
+  <span class="chip">inject fake telemetry</span>
 </header>
 <div class="wrap">
-  <div class="card">
+  <div class="panel">
     <h2>Stands in for the LMU telemetry bridge</h2>
     <p class="note">Drive the dashboard with these controls to rehearse the whole race in
       minutes — no game needed. Later this is replaced by the Python bridge pushing real
@@ -35,7 +36,7 @@
     </div>
   </div>
 
-  <div class="card" style="margin-top:12px">
+  <div class="panel" style="margin-top:12px">
     <h2>Current sim state (what dashboard would receive)</h2>
     <pre id="out" style="color:var(--mut);white-space:pre-wrap"></pre>
     <p class="note">Phase 3: this writes to Supabase <code>race_state</code>; dashboard subscribes.

@@ -1,34 +1,111 @@
+/* Arentim Racing Team — Pit Wall. F1-telemetry look, racing red, responsive. */
 :root{
-  --bg:#0d1117; --panel:#161b22; --line:#30363d; --txt:#e6edf3;
-  --mut:#8b949e; --ok:#3fb950; --warn:#d29922; --bad:#f85149; --accent:#58a6ff;
+  --bg:#07090d; --bg2:#0d1016; --panel:#11151d; --panel2:#151a23;
+  --line:#222a36; --line2:#2d3745;
+  --txt:#e8edf4; --mut:#7d8795; --dim:#515b68;
+  --red:#e10600;           /* team accent */
+  --ok:#2ec96b; --warn:#f2b600; --bad:#ff3b30;
+  --mono:ui-monospace,"SFMono-Regular",Menlo,"JetBrains Mono",Consolas,monospace;
+  --sans:system-ui,"Segoe UI",Roboto,sans-serif;
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--txt);
-  font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif}
-header{display:flex;align-items:center;gap:16px;padding:10px 16px;
-  background:var(--panel);border-bottom:1px solid var(--line)}
-header h1{font-size:15px;margin:0;letter-spacing:.5px}
-.chip{padding:2px 8px;border:1px solid var(--line);border-radius:12px;color:var(--mut)}
-.wrap{max-width:1100px;margin:0 auto;padding:16px}
-.big3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
-.card .label{color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
-.card .val{font-size:34px;font-weight:700;margin-top:4px}
-.row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
-th{color:var(--mut);font-weight:600}
-tr.done{opacity:.45}
-tr.active{background:rgba(88,166,255,.08)}
-.wet{color:var(--accent)}
-.ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)}
-.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-button{background:#21262d;color:var(--txt);border:1px solid var(--line);
-  border-radius:7px;padding:8px 12px;cursor:pointer;font-size:13px}
-button:hover{border-color:var(--accent)}
-button.alert{border-color:var(--bad);color:var(--bad)}
-input,select{background:#0d1117;color:var(--txt);border:1px solid var(--line);
-  border-radius:6px;padding:6px 8px;font-size:13px}
-label.fld{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:6px 0}
-h2{font-size:13px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;margin:0 0 10px}
-.note{color:var(--mut);font-size:12px;margin-top:8px}
+html,body{margin:0}
+body{background:
+    radial-gradient(1200px 600px at 50% -10%, #11151d 0%, var(--bg) 60%);
+  color:var(--txt);font-family:var(--sans);min-height:100vh;
+  -webkit-font-smoothing:antialiased}
+
+/* ---- top bar ---- */
+header{position:relative;display:flex;align-items:center;gap:14px;
+  padding:12px clamp(12px,3vw,28px);background:linear-gradient(180deg,#10141b,#0b0e13);
+  border-bottom:1px solid var(--line)}
+header::before{content:"";position:absolute;left:0;top:0;right:0;height:2px;
+  background:linear-gradient(90deg,var(--red),transparent 60%)}
+.brand{display:flex;flex-direction:column;line-height:1.05}
+.brand .t{font-weight:800;letter-spacing:1.5px;font-size:clamp(14px,1.6vw,19px)}
+.brand .s{font-size:10px;letter-spacing:3px;color:var(--red);font-weight:700}
+.spacer{flex:1}
+.chip{font-family:var(--mono);font-size:clamp(12px,1.4vw,15px);
+  padding:4px 10px;border:1px solid var(--line2);border-radius:6px;
+  color:var(--txt);background:#0c0f15;letter-spacing:1px}
+.chip.clock{font-weight:700;border-color:var(--line2)}
+.chip.wet{color:#49b6ff;border-color:#1c3a52;background:#0a1620}
+.chip.tgt{color:var(--mut);text-transform:uppercase;font-size:11px}
+
+/* ---- layout ---- */
+.wrap{max-width:1280px;margin:0 auto;padding:clamp(12px,2.5vw,22px)}
+.grid{display:grid;gap:clamp(10px,1.5vw,16px)}
+.big3{grid-template-columns:repeat(3,1fr)}
+.mid{grid-template-columns:2fr 1fr}
+
+/* ---- panels ---- */
+.panel{background:linear-gradient(180deg,var(--panel),var(--panel2));
+  border:1px solid var(--line);border-radius:12px;padding:clamp(12px,1.6vw,18px);
+  position:relative;overflow:hidden}
+.panel h2{margin:0 0 12px;font-size:11px;letter-spacing:2px;color:var(--mut);
+  text-transform:uppercase;display:flex;align-items:center;gap:8px}
+.panel h2::before{content:"";width:8px;height:8px;background:var(--red);
+  border-radius:2px;box-shadow:0 0 8px var(--red)}
+
+/* ---- stat tile ---- */
+.stat{text-align:center;padding:clamp(14px,2vw,26px) 10px}
+.stat .label{font-size:11px;letter-spacing:2px;color:var(--mut);text-transform:uppercase}
+.stat .val{font-family:var(--mono);font-weight:700;font-variant-numeric:tabular-nums;
+  font-size:clamp(40px,7vw,76px);line-height:1;margin-top:8px;letter-spacing:-1px}
+.stat .sub{font-family:var(--mono);color:var(--dim);font-size:12px;margin-top:6px}
+.stat.hot .val{color:var(--warn)} .stat.crit .val{color:var(--bad)}
+
+/* ---- status rows ---- */
+.kv{display:flex;justify-content:space-between;align-items:center;
+  padding:9px 2px;border-bottom:1px solid var(--line)}
+.kv:last-child{border-bottom:0}
+.kv .k{color:var(--mut);font-size:12px;letter-spacing:1px;text-transform:uppercase}
+.kv .v{font-family:var(--mono);font-weight:700;font-variant-numeric:tabular-nums;font-size:16px}
+.pill{font-family:var(--mono);font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;
+  letter-spacing:1px}
+.pill.ok{color:var(--ok);background:rgba(46,201,107,.12);border:1px solid rgba(46,201,107,.35)}
+.pill.bad{color:var(--bad);background:rgba(255,59,48,.12);border:1px solid rgba(255,59,48,.4)}
+
+/* ---- tire bar ---- */
+.bar{height:14px;border-radius:7px;background:#0a0d12;border:1px solid var(--line2);
+  overflow:hidden;margin:8px 0}
+.bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--ok),var(--warn));
+  transition:width .3s}
+.bar.over > i{background:linear-gradient(90deg,var(--warn),var(--bad))}
+
+/* ---- events ---- */
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+button{font-family:var(--sans);background:#171c25;color:var(--txt);
+  border:1px solid var(--line2);border-radius:8px;padding:10px 14px;cursor:pointer;
+  font-size:13px;font-weight:600;letter-spacing:.3px;transition:.15s}
+button:hover{border-color:var(--red);transform:translateY(-1px)}
+button.alert{border-color:#5a1714;color:#ff6a60;background:#1a0f0e}
+button.alert:hover{border-color:var(--bad);background:#241110}
+
+/* ---- plan table ---- */
+table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:13px}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);
+  font-variant-numeric:tabular-nums}
+th{color:var(--mut);font-weight:600;font-size:11px;letter-spacing:1.5px;text-transform:uppercase}
+tbody tr:hover{background:#0f141c}
+tr.done{opacity:.4} tr.done td:first-child{border-left:2px solid var(--dim)}
+tr.active{background:rgba(225,6,0,.08)} tr.active td:first-child{border-left:2px solid var(--red)}
+.tire{padding:1px 8px;border-radius:5px;font-size:11px;font-weight:700;letter-spacing:1px}
+.tire.soft{color:#ff4d4d;background:#2a0f10}.tire.med{color:#f2b600;background:#2a230a}
+.tire.hard{color:#d8dee8;background:#1c222b}.tire.wet{color:#49b6ff;background:#0a1a28}
+.act{color:var(--mut)} .act.new{color:var(--ok)}
+
+.note{color:var(--dim);font-size:12px;margin:10px 0 0;font-family:var(--mono)}
+input,select{background:#0a0d12;color:var(--txt);border:1px solid var(--line2);
+  border-radius:7px;padding:8px 10px;font-size:13px;font-family:var(--mono)}
+label.fld{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:8px 0}
+
+/* ---- responsive ---- */
+@media(max-width:820px){ .mid{grid-template-columns:1fr} }
+@media(max-width:560px){
+  .big3{grid-template-columns:1fr} .stat{padding:16px 10px}
+  header{flex-wrap:wrap;gap:8px} .brand{width:100%}
+  .chip{font-size:12px}
+}
+/* big TV: let it breathe */
+@media(min-width:1600px){ .wrap{max-width:1500px} }
