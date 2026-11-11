@@ -503,6 +503,9 @@ label.fld{display:flex;justify-content:space-between;align-items:center;gap:10px
   background:radial-gradient(circle at 50% 40%, #ffffff 0%, #e9edf3 100%);
   box-shadow:0 1px 4px rgba(0,0,0,.35),inset 0 0 0 1px rgba(255,255,255,.5)}
 .mlogo{max-width:34px;max-height:34px;object-fit:contain;display:block}
+/* dark plate for light/silver logos (e.g. Genesis) that vanish on the white plate */
+.mbadge.plate-dark{background:radial-gradient(circle at 50% 40%, #2a3340 0%, #141a22 100%);
+  box-shadow:0 1px 4px rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,255,255,.08)}
 /* monogram fallback (no logo file): subtle neutral chip, brand-colour letters */
 .mbadge.nologo{background:#0d131b;border:1px solid var(--line2);color:var(--mc);
   font-family:var(--mono);font-weight:800;font-size:13px;letter-spacing:.5px}

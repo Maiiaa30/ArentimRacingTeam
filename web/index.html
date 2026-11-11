@@ -326,7 +326,7 @@ const MANUF = {
   'NISSAN':{c:'#C3002F',s:'NIS',g:'nissan'}, 'HONDA':{c:'#E40521',s:'HON',g:'honda'}, 'FORD':{c:'#00274E',s:'FOR',g:'ford'},
   'MUSTANG':{c:'#00274E',s:'FOR',g:'ford'},
   'LEXUS':{c:'#1A1A1A',s:'LEX',g:'lexus'},
-  'GENESIS':{c:'#c6a15a',s:'GEN',g:'genesis'},
+  'GENESIS':{c:'#c6a15a',s:'GEN',g:'genesis',dark:true},
   'AF CORSE':{c:'#D40000',s:'FER',g:'ferrari'}, 'AF':{c:'#D40000',s:'FER',g:'ferrari'},
   'ISOTTA':{c:'#6b1f2a',s:'ISO',g:''},
   'MERCEDES-AMG':{c:'#00A19C',s:'AMG',g:'mercedes'}, 'AMG':{c:'#00A19C',s:'AMG',g:'mercedes'},
@@ -340,7 +340,7 @@ function manufMeta(name){
 }
 function badgeHtml(mf){
   // full-colour PNG logo on a transparent chip; monogram fallback if no logo file.
-  if(mf.g) return `<span class="mbadge" style="--mc:${mf.c}">`+
+  if(mf.g) return `<span class="mbadge${mf.dark?' plate-dark':''}" style="--mc:${mf.c}">`+
     `<img class="mlogo" src="img/manuf/${mf.g}.png" alt="" `+
     `onerror="this.parentNode.classList.add('nologo');this.remove();"><span class="mono">${mf.s}</span></span>`;
   return `<span class="mbadge nologo" style="--mc:${mf.c}"><span class="mono">${mf.s}</span></span>`;
