@@ -71,6 +71,7 @@
     <div class="grid rightcol">
       <div class="panel">
         <h2>Status</h2>
+        <div class="nextstop" id="nextStop"></div>
         <div class="kv"><span class="k">On track</span><span class="v" id="driver">—</span></div>
         <div class="kv"><span class="k">Next driver</span><span class="v" id="nextDriver">—</span></div>
         <div class="kv"><span class="k">Stint left</span><span class="v" id="stintLeft">—</span></div>
@@ -226,6 +227,7 @@
       <span class="chip" id="lapBest">best —</span>
     </div>
     <p class="note" style="margin-top:8px">Each completed lap recorded from the live stream — driver, time, fuel, tyre life. Export for post-race review.</p>
+    <div id="lapPace"></div>
     <div id="lapBody"></div>
   </div>
 </div>
@@ -474,6 +476,30 @@ function render(){
   $('boxAlert').classList.toggle('on', boxOn);
   $('boxNext').textContent = nextStint ? nextStint.driver : 'same driver';
   window._boxState = boxOn;   // visual BOX banner only — no sound
+
+  // NEXT STOP card — consolidated call for whoever's on the wall
+  const nsEl = $('nextStop');
+  if(nsEl){
+    if(!nextStint){
+      nsEl.className='nextstop finish';
+      nsEl.innerHTML='<div class="ns-head">NEXT STOP</div><div class="ns-main">No more stops — run to the flag 🏁</div>';
+    } else {
+      const sameDrv = state.current_driver && nextStint.driver === state.current_driver;
+      const fuelAdd = Math.round(nextStint.fuel_load);
+      const tyre = nextStint.tire_action === 'new'
+        ? '<b class="ns-new">NEW tyres</b>' : '<b class="ns-keep">keep tyres</b>';
+      const swap = sameDrv
+        ? '<b class="ns-stay">stays in</b>'
+        : '→ <b>'+nextStint.driver+'</b>';
+      const lapsTo = Math.max(0, nextStint.in_lap - state.laps_done);
+      const when = boxOn ? '<span class="ns-now">BOX NOW</span>'
+        : 'lap '+nextStint.in_lap+' · in '+lapsTo+' lap'+(lapsTo===1?'':'s');
+      nsEl.className = 'nextstop' + (boxOn ? ' due' : '');
+      nsEl.innerHTML =
+        '<div class="ns-head">NEXT STOP <span class="ns-when">'+when+'</span></div>'+
+        '<div class="ns-main">+'+fuelAdd+'L · '+tyre+' · '+swap+'</div>';
+    }
+  }
   // race info strip
   $('pos').textContent = state.position ? 'P'+state.position : '—';
   $('gapA').textContent = state.gap_ahead_s==null ? '—' : '+'+state.gap_ahead_s.toFixed(1)+'s';
@@ -890,6 +916,7 @@ function renderLapLog(){
   const best = lapLog.reduce((m,r)=> (r.lap_s!=null && (m==null||r.lap_s<m)) ? r.lap_s : m, null);
   $('lapCount').textContent = lapLog.length + ' laps';
   $('lapBest').textContent = 'best ' + (best!=null ? fmtLap(best) : '—');
+  renderLapPace(best);
   if(!lapLog.length){ $('lapBody').innerHTML = '<p class="note">No laps yet — they appear here as the car completes them.</p>'; return; }
   const rows = lapLog.slice().reverse().map(r=>{
     const purple = (r.lap_s!=null && r.lap_s===best) ? ' class="best"' : '';
@@ -899,6 +926,37 @@ function renderLapLog(){
   }).join('');
   $('lapBody').innerHTML = `<table class="laptbl"><thead><tr><th>Lap</th><th>Time</th><th>Driver</th>`+
     `<th>Fuel</th><th>Set lap</th><th>Pos</th><th>Wx</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+// per-driver pace comparison (actual laps). Clean/representative laps only:
+// drop in/out-laps and anything >107% of the driver's own best (pits, offs).
+function renderLapPace(best){
+  const el = $('lapPace'); if(!el) return;
+  const byDrv = {};
+  lapLog.forEach(r=>{ if(r.lap_s!=null && r.lap_s>0 && r.driver && r.driver!=='—'){
+    (byDrv[r.driver] = byDrv[r.driver] || []).push(r.lap_s); } });
+  const names = Object.keys(byDrv);
+  if(!names.length){ el.innerHTML=''; return; }
+  const rows = names.map(n=>{
+    const all = byDrv[n];
+    const bst = Math.min(...all);
+    const clean = all.filter(v=> v <= bst*1.07);           // representative laps
+    const avg = clean.reduce((a,b)=>a+b,0)/clean.length;
+    const spread = clean.length>1 ? Math.max(...clean)-Math.min(...clean) : 0; // consistency
+    return { n, laps: all.length, clean: clean.length, bst, avg, spread };
+  }).sort((a,b)=>a.avg-b.avg);
+  const fieldBest = Math.min(...rows.map(r=>r.bst));
+  const body = rows.map(r=>{
+    const gap = r.bst - fieldBest;
+    return `<tr><td class="dn">${r.n}</td><td>${r.laps}</td>`+
+      `<td${r.bst===fieldBest?' class="best"':''}>${fmtLap(r.bst)}</td>`+
+      `<td>${gap>0?'+'+gap.toFixed(3):'—'}</td>`+
+      `<td>${fmtLap(r.avg)}</td>`+
+      `<td class="dim">±${r.spread.toFixed(2)}s</td></tr>`;
+  }).join('');
+  el.innerHTML =
+    `<div class="pace-title">Driver pace <span class="note" style="text-transform:none;letter-spacing:0">— clean laps only (≤107% of own best)</span></div>`+
+    `<table class="laptbl pace"><thead><tr><th>Driver</th><th>Laps</th><th>Best</th>`+
+    `<th>Gap</th><th>Avg</th><th>Consistency</th></tr></thead><tbody>${body}</tbody></table>`;
 }
 function exportLapCsv(){
   const head = ['lap','lap_s','driver','fuel_L','laps_on_set','position','weather','timestamp'];

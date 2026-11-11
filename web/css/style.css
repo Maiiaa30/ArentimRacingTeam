@@ -261,6 +261,25 @@ tr.active{background:rgba(225,6,0,.08)} tr.active td:first-child{border-left:2px
 .tyre .tv{font-family:var(--mono);font-size:10.5px;color:var(--mut);line-height:1.4}
 .dmg-meta{margin-top:16px;font-family:var(--mono);font-size:12px;color:var(--dim)}
 /* event log */
+/* ---- driver pace comparison ---- */
+.pace-title{font-family:var(--mono);font-size:11px;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--mut);margin:4px 0 8px}
+table.laptbl.pace{margin-bottom:18px}
+
+/* ---- next-stop call card ---- */
+.nextstop{margin:0 0 12px;padding:9px 11px;border-radius:9px;
+  background:linear-gradient(180deg,#121b26,#0e151d);border:1px solid var(--line);
+  border-left:3px solid var(--accent,#5fe08a)}
+.nextstop.due{border-left-color:#ffce45;background:linear-gradient(180deg,#201d10,#17130a)}
+.nextstop.finish{border-left-color:#b06cff}
+.ns-head{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--mut);
+  text-transform:uppercase;display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.ns-when{margin-left:auto;letter-spacing:.5px;color:var(--txt);font-weight:700}
+.ns-now{color:#ffce45;font-weight:800;animation:nsblink 1s steps(2) infinite}
+@keyframes nsblink{50%{opacity:.4}}
+.ns-main{font-family:var(--sans);font-size:14px;color:var(--txt);font-weight:600;line-height:1.35}
+.ns-main b{font-weight:800}
+.ns-new{color:#5fe08a} .ns-keep{color:#9aa4b2} .ns-stay{color:#49b6ff}
 .ev-count{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--txt);
   background:#1a2430;border:1px solid var(--line);border-radius:10px;padding:1px 7px;letter-spacing:0}
 .ev-expand{margin-left:auto;font-family:var(--mono);font-size:10px;font-weight:700;
