@@ -1,12 +1,37 @@
-# Telemetry Bridge (Le Mans Ultimate / rF2) — later phase
+# Telemetry Bridge (Le Mans Ultimate / rF2)
 
-**Not built yet.** Deferred until we validate the game exposes the fields we need.
+Reads the game's shared memory and feeds the pit wall. The reader is written
+(`pitwall_bridge.py`); the **field mapping still needs validating against the running
+game** — that's what `--print` is for.
 
 ## Plan
 
 LMU + rF2 share the same engine. Telemetry comes from the **rF2 Shared Memory Map
 Plugin** (DLL dropped in the game's `Plugins/` folder, enabled in config). A Python
 reader (`pyRfactor2SharedMemory`) reads shared memory and pushes to Supabase.
+
+## Run
+
+```bash
+pip install -r requirements.txt           # pyRfactor2SharedMemory (Windows + game)
+
+# 1. VALIDATE FIRST — drive the car and watch the fields update (no account needed):
+python3 pitwall_bridge.py --print
+
+# 2. Test the whole chain without the game (synthetic race):
+python3 pitwall_bridge.py --demo --print
+
+# 3. Push live telemetry to the dashboard via Supabase:
+set SUPA_URL=https://xxxx.supabase.co     # (export on Linux/mac)
+set SUPA_ANON=eyJ...anon-public-key...
+set SUPA_PASSCODE=your-shared-word         # must match race_secret.passcode
+python3 pitwall_bridge.py --supabase       # add --print to watch what's sent
+```
+
+`--print` is the field-validation step: run it while driving and confirm `fuel_now`,
+`laps_done`, `last_lap_s`, `current_driver`, wheels, etc. actually populate. Anything
+that stays `null` isn't exposed by the game → enter it manually in the dashboard /
+sim feeder. Report back what `--print` shows and the mapping gets tuned to match.
 
 ## Field map — validate FIRST (confirm each updates while driving)
 
