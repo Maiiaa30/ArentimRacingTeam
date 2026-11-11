@@ -28,7 +28,7 @@
       <select id="wx" onchange="upd()"><option value="dry">dry</option><option value="wet">wet</option></select>
     </label>
     <label class="fld">Driver
-      <select id="drv" onchange="upd()"><option>D1</option><option>D2</option><option>D3</option><option>D4</option></select>
+      <select id="drv" onchange="upd()"><option>Francisco Coelho</option><option>Diogo Rodrigues</option><option>Rui Garcia</option><option>Helder Marques</option></select>
     </label>
     <label class="fld">Position <input type="number" id="pos" value="4" oninput="upd()"></label>
     <label class="fld">Gap ahead (s) <input type="number" step="0.1" id="ga" value="3.2" oninput="upd()"></label>
@@ -76,14 +76,14 @@
 <script>
 // fabricate a plausible field of rivals around our position (dev only)
 function genRivals(myPos, myLast, myLap){
-  // mixed field: Hypercars (faster) up top, then LMGT3; our car is GT3 #30
+  // mixed field: Hypercars (faster) up top, then LMGT3; our car is GT3 #38
   const field=[
     {num:'7',  manuf:'Toyota',   model:'GR010 Hybrid', team:'Toyota Gazoo Racing', driver:'Kobayashi', cls:'Hypercar'},
     {num:'51', manuf:'Ferrari',  model:'499P',         team:'Ferrari AF Corse',    driver:'Pier Guidi', cls:'Hypercar'},
     {num:'2',  manuf:'Cadillac', model:'V-Series.R',   team:'Cadillac Racing',     driver:'Bamber',     cls:'Hypercar'},
     {num:'6',  manuf:'Porsche',  model:'963',          team:'Porsche Penske',      driver:'Estre',      cls:'Hypercar'},
     {num:'92', manuf:'Porsche',  model:'911 GT3 R',    team:'Manthey PureRxcing',  driver:'Malykhin',   cls:'GT3'},
-    {num:'30', manuf:'Arentim',  model:'GT3',          team:'Arentim Racing Team', driver:'',           cls:'GT3'},
+    {num:'38', manuf:'Arentim',  model:'GT3',          team:'Arentim Racing Team', driver:'Francisco Coelho', cls:'GT3'},
     {num:'15', manuf:'BMW',      model:'M4 GT3',        team:'WRT',                 driver:'Rossi',      cls:'GT3'},
     {num:'88', manuf:'Lamborghini', model:'Huracán GT3', team:'Iron Lynx',         driver:'Perera',     cls:'GT3'},
     {num:'46', manuf:'Aston',    model:'Vantage GT3',   team:'Heart of Racing',     driver:'Riberas',    cls:'GT3'},
@@ -161,7 +161,7 @@ function scReset(){
   if(_auto) toggleAuto();
   [['fuel',75],['lap',95],['laps',0],['slap',0],['el',0],['pos',4],['ga',3.2],['gb',5.8],
    ['ll',95.42],['bl',94.18],['dmg',0],['pen',0],['tw',18],['los',13],['ttemp',28],['atemp',19]].forEach(([id,v])=>{ document.getElementById(id).value=v; });
-  wx.value='dry'; drv.value='D1'; flag.value='green'; inpit.checked=false; upd();
+  wx.value='dry'; drv.value='Francisco Coelho'; flag.value='green'; inpit.checked=false; upd();
 }
 upd();
 </script>
