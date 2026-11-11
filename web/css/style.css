@@ -31,6 +31,10 @@ header::before{content:"";position:absolute;left:0;top:0;right:0;height:2px;
 .chip.clock{font-weight:700;border-color:var(--line2)}
 .chip.wet{color:#49b6ff;border-color:#1c3a52;background:#0a1620}
 .chip.tgt{color:var(--mut);text-transform:uppercase;font-size:11px}
+.chip.conn{font-weight:700}
+.chip.conn.live{color:#5fe08a;border-color:rgba(46,201,107,.45);background:rgba(46,201,107,.08)}
+.chip.conn.stale{color:#ffce45;border-color:rgba(242,182,0,.45);background:rgba(242,182,0,.08)}
+.chip.conn.idle{color:var(--mut);border-color:var(--line2)}
 
 /* ---- layout ---- */
 .wrap{max-width:1360px;width:100%;margin:0 auto;padding:clamp(12px,2vw,20px);

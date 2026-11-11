@@ -10,6 +10,7 @@
 <header>
   <div class="brand"><span class="t">ARENTIM RACING TEAM</span><span class="s">PIT WALL</span></div>
   <div class="spacer"></div>
+  <span class="chip conn" id="conn" title="data link">● —</span>
   <span class="chip clock" id="clock">--:--:--</span>
   <span class="chip wet" id="wx">DRY</span>
   <span class="chip tgt" id="target">fewest stops</span>
@@ -510,10 +511,20 @@ function closeLaps(){ $('lapModal').classList.remove('open'); }
 const LIVE_FIELDS = ['fuel_now','laps_done','stint_lap','avg_lap_live','elapsed_s',
   'current_driver','last_lap_s','best_lap_s','position','gap_ahead_s','gap_behind_s',
   'weather_now','penalties','aero_pct','body_pct','susp_pct','tyres_pct','repair_s','tire_wear_pct','laps_on_tires'];
-let _syncInit = true;
+let _syncInit = true, _lastFeed = null;
+function updateConn(){
+  const el = $('conn'); if(!el) return;
+  const mode = PitDB.mode === 'supabase' ? 'cloud' : 'local';
+  if(_lastFeed == null){ el.className='chip conn idle'; el.textContent='● waiting · '+mode; return; }
+  const age = (Date.now() - _lastFeed)/1000;
+  if(age < 8){ el.className='chip conn live'; el.textContent='● live · '+mode; }
+  else { el.className='chip conn stale'; el.textContent='● stale '+(age<60?Math.round(age)+'s':Math.round(age/60)+'m')+' · '+mode; }
+}
+setInterval(updateConn, 1000);
 PitDB.onState(s => {
   LIVE_FIELDS.forEach(k => { if(s[k] !== undefined) state[k] = s[k]; });
   if(Array.isArray(s.wheels)) state.wheels = s.wheels;
+  _lastFeed = Date.now(); updateConn();
   if(_syncInit){
     // first snapshot = just seed the baseline, don't synthesize a lap history
     _lastLoggedLap = state.laps_done; _syncInit = false;
@@ -527,6 +538,7 @@ PitDB.onState(s => {
 });
 
 render();
+updateConn();
 </script>
 </body>
 </html>
