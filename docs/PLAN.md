@@ -32,7 +32,8 @@ BOTH:          Supabase (Postgres + realtime) → dashboard (static SPA, your do
   tire_life, pit_loss, wet factors, optimize_target.
 - `race_state` — elapsed, laps_done, fuel_now, last/avg/best lap, current_driver, stint_lap,
   stint_time_s, tires_used, tire_wear_pct, laps_on_tires, last_pit_lap, position,
-  gap_ahead_s, gap_behind_s, damage_pct, penalties, weather_now, flag, active_pc, updated_at.
+  gap_ahead_s, gap_behind_s, aero_pct, body_pct, susp_pct, tyres_pct, repair_s,
+  penalties, weather_now, flag, active_pc, updated_at.
 - Car class: GT3 (fuel liters). Hypercar support kept via `energy_mode:"ve"` + `ve_*` config.
   See `bridge/README.md` for the telemetry→field map and what needs validation.
 - `weather_timeline` — [{start_s, condition, wetness}].
@@ -47,24 +48,23 @@ BOTH:          Supabase (Postgres + realtime) → dashboard (static SPA, your do
 - `regenerate` — lock done stints, rebuild remainder from current real state.
 - `whatIf` — clone + hypothetical, run regenerate, no commit.
 
-## Damage model (deep)
-UI: top-view car, 8 body zones colored from `mDentSeverity` (0/1/2 → green/amber/red),
-4 wheels at corners (wear %, flat/detached, brake-temp tint); details below.
+## Damage model (deep) — LMU categories
+UI (blackrack-style): a color-coded DAMAGE list — **Aero / Body / Susp / Tyres %** +
+**Repair (s)** — beside a TYRES grid (wear %, brake °C, tread °, pressure). No car drawing.
 
-- **Zone map:** `mDentSeverity[8]` indices → body location is NOT in the header. Convention
-  in `config.damage.zone_labels` (front, f-right, right, r-right, rear, r-left, left, f-left).
-  VALIDATE by hitting known corners; cross-check with `mLastImpactPos`.
-- **Body % (derived):** `sum(dent)/16 × 100`. No raw aero %.
+- **Categories:** LMU reports Aero/Body/Susp/Tyres as percentages (engineer menu / HUD),
+  not an 8-zone dent map. `worst` = max of the four.
+- **Repair time:** LMU gives an estimated repair time directly (`dmg.repair_s`); config
+  `repair_fallback_s` only if missing.
 - **Lap penalty = MEASURED, not guessed:** `Δt = avg_lap_after_incident − baseline_avg`.
-- **Repair times:** from LMU engineer menu if shared memory exposes them; else
-  `config.damage.repair_body_s / repair_all_s` (validate). HUD "red damage" = mandatory flag.
 - **Auto-recommend** (engine `repairDecision`):
-  - mandatory REPAIR_NOW if flat / detached wheel
-  - severe → REPAIR (escalation/DNF risk)
+  - mandatory REPAIR_NOW if a wheel is flat/detached or `susp ≥ susp_critical`
+  - severe → REPAIR if any category ≥ `severe_pct`
   - else REPAIR if `repair_cost < Δt × laps_remaining`
   - `repair_cost` = repair_time if pitting anyway, else `pit_loss + repair_time`
 - **Feeds:** Forced Pit event carries repair_time → race regenerates; Δt → make-finish recompute.
-- Engine: `damageSummary()` + `repairDecision()` (pure, tested with fake data).
+- Config: `config.damage` = { severe_pct, susp_critical, repair_fallback_s }.
+- Engine: `damageSummary()` + `repairDecision()` (pure, tested).
 
 ## Build phases
 1. Schema + dashboard shell ✅ (scaffold)

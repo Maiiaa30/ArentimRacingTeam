@@ -19,9 +19,10 @@ reader (`pyRfactor2SharedMemory`) reads shared memory and pushes to Supabase.
 | Pit detection        | `mInPits` / `mPitState`                   | should exist |
 | Position             | `mPlace` (overall + in-class)             | should exist |
 | Gap ahead / behind   | `mTimeBehindNext` / leader deltas         | confirm |
-| Damage               | `mDentSeverity[8]` / `mDetached` / aero   | partial — confirm |
+| Damage (Aero/Body/Susp/Tyres %) | LMU engineer categories        | confirm — LMU reports these 4 % |
+| Repair time (s)      | LMU estimated repair time                 | confirm — game shows it directly |
 | Penalties            | `mNumPenalties`                           | confirm |
-| Tire wear            | `mWear` per tire                          | confirm |
+| Tire wear / brake / temp / press | `mWear` / `mBrakeTemp` / `mTemperature` / `mPressure` per tire | confirm |
 | Weather now          | rain / track wetness fields               | confirm |
 | Weather forecast     | timeline / forecast                       | UNCONFIRMED in LMU |
 | Virtual Energy (VE)  | `mVirtualEnergy` (Hypercar only)          | confirm — CrewChief reads it, so likely present |
