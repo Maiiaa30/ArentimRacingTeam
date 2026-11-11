@@ -411,10 +411,12 @@ label.fld{display:flex;justify-content:space-between;align-items:center;gap:10px
 
 /* ---- standings modal: BIG, class groups + colors + logos ---- */
 /* standings = near-fullscreen board (per requested size) */
-.modal.xl{width:96vw;max-width:1800px;height:92dvh;max-height:92dvh;
+/* size to content, only grow to near-fullscreen when there's enough to show —
+   avoids a tall box full of blank space when a class has few cars */
+.modal.xl{width:96vw;max-width:1800px;height:auto;max-height:92dvh;
   padding:clamp(20px,2.4vw,34px);display:flex;flex-direction:column}
 .modal.xl h2{flex:0 0 auto} .modal.xl > .note{flex:0 0 auto}
-#standBody{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:auto;padding-right:6px;margin-top:6px}
+#standBody{flex:0 1 auto;min-height:0;overflow-y:auto;overflow-x:auto;padding-right:6px;margin-top:6px}
 .laptbl.stand{border-collapse:separate;border-spacing:0;font-size:15px}
 .laptbl.stand th{font-size:12px;padding:10px 10px}
 .laptbl.stand td{padding:11px 10px}
