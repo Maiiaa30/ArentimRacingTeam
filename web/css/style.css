@@ -50,9 +50,10 @@ header::before{content:"";position:absolute;left:0;top:0;right:0;height:2px;
 .wx-title{font-size:10px;letter-spacing:2px;color:var(--mut);font-weight:700;min-width:58px}
 .wx-wrap{flex:1;min-width:0;position:relative}
 .wx-bar{cursor:crosshair}
-.wx-tip{position:absolute;top:-30px;transform:translateX(-50%);padding:3px 8px;border-radius:6px;
-  font-family:var(--mono);font-size:11px;white-space:nowrap;pointer-events:none;opacity:0;
-  transition:opacity .1s;border:1px solid var(--line2);background:#0c1017;z-index:5}
+.wx-tip{position:absolute;top:-32px;transform:translateX(-50%);padding:4px 9px;border-radius:6px;
+  font-family:var(--mono);font-size:12px;white-space:nowrap;pointer-events:none;opacity:0;
+  transition:opacity .1s;border:1px solid var(--line2);background:#0c1017;z-index:60;
+  box-shadow:0 4px 14px rgba(0,0,0,.6)}
 .wx-tip.show{opacity:1}
 .wx-tip.wet{color:#6fc4ff;border-color:#1c3a52}
 .wx-tip.dry{color:#7fb06a;border-color:#22311b}
@@ -271,15 +272,19 @@ label.fld{display:flex;justify-content:space-between;align-items:center;gap:10px
   .tbl-scroll{overflow:auto}
 }
 @media(max-width:620px){ .rightcol{grid-template-columns:1fr} }
-/* short screens (e.g. 768-tall laptops): compact to reduce scrolling */
-@media(min-width:901px) and (max-height:860px){
-  .wrap{padding:10px clamp(12px,2vw,20px);gap:9px}
+/* shorter-than-1080 windows (browser chrome/taskbar): compact to avoid scroll */
+@media(min-width:901px) and (max-height:1079px){
+  .wrap{padding:9px clamp(12px,2vw,20px);gap:9px}
   .big3 .stat{padding:12px 14px}
-  .big3 .val{font-size:clamp(30px,4vw,44px)}
+  .big3 .val{font-size:clamp(28px,3.4vw,40px)}
+  .big3 .label{font-size:10px}
   .big3 .stat .sub{display:none}
-  .tbl-scroll{max-height:min(38vh,320px)}
-  .ev-log{max-height:72px}
+  .strip .mini{padding:6px 10px}
+  .tbl-scroll{max-height:min(40vh,340px)}
+  .ev-log{max-height:68px}
   .plan-stats{margin-bottom:9px}
+  .panel{padding:12px 14px}
+  .kv{padding:5px 0}
 }
 @media(max-width:560px){
   .big3{grid-template-columns:1fr} .stat{padding:14px 10px}
