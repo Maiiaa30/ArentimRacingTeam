@@ -73,6 +73,7 @@
         <h2>Status</h2>
         <div class="kv"><span class="k">On track</span><span class="v" id="driver">—</span></div>
         <div class="kv"><span class="k">Next driver</span><span class="v" id="nextDriver">—</span></div>
+        <div class="kv"><span class="k">Stint left</span><span class="v" id="stintLeft">—</span></div>
         <div class="kv"><span class="k">Stint time</span><span class="v" id="stintTime">—</span></div>
         <div class="kv"><span class="k">Laps left</span><span class="v" id="lapsLeft">—</span></div>
         <div class="kv"><span class="k">Stops left</span><span class="v" id="stops">—</span></div>
@@ -383,8 +384,10 @@ function render(){
     const [txt,cls] = map[fl] || map.green;
     fc.textContent = '● '+txt; fc.className = 'chip flag '+cls;
   }
-  const wet = m.weather_now==='wet';
-  $('wx').textContent = m.weather_now.toUpperCase(); $('wx').classList.toggle('wet',wet);
+  // weather NOW = the game's real weather when fed; fall back to the plan's forecast.
+  const liveWx = state.weather_now || m.weather_now;
+  const wet = liveWx==='wet';
+  $('wx').textContent = (liveWx||'dry').toUpperCase(); $('wx').classList.toggle('wet',wet);
   $('fuelLaps').textContent = m.fuel_laps_left;
   $('pitIn').textContent = m.pit_in_laps;
   $('pitTile').className = 'panel stat'+(m.pit_in_laps<=1?' crit':m.pit_in_laps<=3?' hot':'');
@@ -410,6 +413,20 @@ function render(){
   $('stintTime').textContent = state.stint_time_s!=null ? hms(state.stint_time_s) : '—';
   const nextStint = plan.stints[activeIdx+1];
   $('nextDriver').textContent = nextStint ? nextStint.driver : '—';
+  // time left in THIS stint before the swap/pit (real elapsed vs planned stint end)
+  const sl = $('stintLeft');
+  if(sl){
+    const stintEnd = nextStint ? nextStint.in_time_s : plan.finish_time_s;
+    const left = (state.elapsed_s!=null && stintEnd!=null) ? stintEnd - state.elapsed_s : null;
+    if(left==null){ sl.textContent='—'; sl.className='v'; }
+    else if(left<=0){ sl.textContent = nextStint ? 'BOX NOW' : 'to finish'; sl.className='v bad'; }
+    else {
+      const mm=Math.floor(left/60), ss=Math.floor(left%60);
+      const t = mm>=1 ? mm+'m '+String(ss).padStart(2,'0')+'s' : ss+'s';
+      sl.textContent = t + (nextStint ? ' → '+nextStint.driver : ' → finish');
+      sl.className = 'v' + (left<120 ? ' warn' : '');
+    }
+  }
   const boxOn = m.pit_in_laps <= 2;
   $('boxAlert').classList.toggle('on', boxOn);
   $('boxNext').textContent = nextStint ? nextStint.driver : 'same driver';
@@ -635,7 +652,21 @@ function lockedStints(){
   locked.forEach(s=> s.status = 'done');
   return locked;
 }
-function regen(){ currentPlan = Engine.regenerate(cfg, wx, curState(), lockedStints()); }
+// live weather timeline: the configured forecast, but with the CURRENT segment
+// forced to the game's real weather so the live plan reacts to actual conditions.
+function liveWxTimeline(){
+  if(!state.weather_now) return wx;
+  const now = state.elapsed_s||0;
+  const tl = wx.map(seg=>({...seg}));
+  let cur = 0; tl.forEach((seg,i)=>{ if((seg.start_s||0)<=now) cur=i; });
+  if(tl[cur]){
+    const wetNow = state.weather_now==='wet';
+    tl[cur] = {...tl[cur], condition:state.weather_now,
+               wetness: wetNow ? (tl[cur].wetness||0.6) : 0 };
+  }
+  return tl;
+}
+function regen(){ currentPlan = Engine.regenerate(cfg, liveWxTimeline(), curState(), lockedStints()); }
 
 const EV_KEY = 'arentim_pitwall_events';
 let eventLog = [];
@@ -961,6 +992,7 @@ const LIVE_FIELDS = ['fuel_now','fuel_capacity','laps_done','stint_lap','avg_lap
   'parts_detached','last_impact_mag','last_impact_ago_s','tire_wear_pct','laps_on_tires','last_pit_lap',
   'flag','in_pits','session_remaining_s','track_temp','air_temp','lap_delta_s','cls_position'];
 let _syncInit = true, _lastFeed = null, _pitActive = false;
+let _lastRegenLap = -1, _lastRegenWx = null;
 function updateConn(){
   const el = $('conn'); if(!el) return;
   const mode = PitDB.mode === 'supabase' ? 'cloud' : 'local';
@@ -990,6 +1022,15 @@ PitDB.onState(s => {
     // updates we don't fabricate the missing ones (their per-lap data is unknown)
     captureLap(state.laps_done);
     _lastLoggedLap = state.laps_done;
+  }
+  // live strategy: rebuild the remaining plan from real state when the race moves
+  // on (new lap) or the weather flips, so pit windows + stint targets track reality.
+  if(state.fuel_now!=null){
+    const wxNowS = state.weather_now || null;
+    if(state.laps_done !== _lastRegenLap || wxNowS !== _lastRegenWx){
+      try { regen(); } catch(e){}
+      _lastRegenLap = state.laps_done; _lastRegenWx = wxNowS;
+    }
   }
   render();
 });

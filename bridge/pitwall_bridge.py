@@ -180,17 +180,17 @@ def read_state(info):
     flag = "green"
     phase = g(si, "mGamePhase")
     sflags = g(si, "mSectorFlag")
-    local_yellow = bool(sflags and any(int(f) for f in list(sflags)))
+    # Trust ONLY mGamePhase for the flag (local sector-yellow bits proved unreliable
+    # and flagged green racing as yellow). 6 = full-course yellow, 7 = red/stopped,
+    # 8 = checkered/over; everything else (0-5 = garage..green) shows green.
     if phase == 8:
         flag = "checkered"
     elif phase == 7:
         flag = "red"
     elif phase == 6:
         flag = "fcy"
-    elif phase == 5:
-        flag = "yellow" if local_yellow else "green"
     else:
-        flag = "green"   # pre-race phases 0-4
+        flag = "green"
 
     # weather snapshot (dashboard reads weather_now)
     raining = g(si, "mRaining")                    # 0..1 severity
@@ -300,6 +300,8 @@ def read_state(info):
         "laps_on_tires": None,
         "tire_wear_pct": None,                       # dashboard derives from wheels
         "_dents": dent_list,
+        "_game_phase": phase,                        # diagnostic: raw mGamePhase
+        "_sector_flags": list(sflags) if sflags else None,
         "updated_at": _now_iso(),
     }
 
