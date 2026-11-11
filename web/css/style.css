@@ -488,7 +488,28 @@ label.fld{display:flex;justify-content:space-between;align-items:center;gap:10px
 .sst b{font-family:var(--mono);font-size:13px;color:var(--txt);font-weight:700;font-variant-numeric:tabular-nums}
 .sst b.best{color:#b06cff}
 .sst b.lead{color:var(--cc);font-weight:800}
-@media(max-width:1100px){.stand-cols{flex-direction:column}.stand-list{max-height:40vh}}
+/* stack the two class columns when the modal gets narrow.
+   In a column flex with auto-height, flex:1 1 0 collapses the children to 0 —
+   size them to content (header + its own scroll list) instead. */
+@media(max-width:1200px){
+  .stand-cols{flex-direction:column}
+  .stand-col{flex:0 0 auto}
+  .stand-list{max-height:42vh}
+}
+/* when a row is tight, drop the stat grid to its own full-width line (so it
+   never overflows/clips) and let the stats wrap */
+@media(max-width:920px){
+  .srow{grid-template-columns:auto auto 1fr;row-gap:6px}
+  .srow .sstats{grid-column:1 / -1;justify-content:flex-start;gap:8px 16px}
+}
+@media(max-width:560px){
+  .stand-col-h{font-size:14px;padding:10px}
+  .srk b{font-size:18px}
+  .scar-nm{font-size:14px}
+  .sst{min-width:34px}
+  .sst b{font-size:12px}
+  .modal.xl{padding:14px}
+}
 .tag-pit{font-family:var(--mono);font-size:10px;font-weight:700;color:#0b0e13;background:#ffce45;
   border-radius:3px;padding:1px 5px;margin-left:6px;vertical-align:middle}
 #sectorBody{flex:0 0 auto}
