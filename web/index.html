@@ -86,6 +86,7 @@
           <button onclick="openWif()">What-if</button>
           <button onclick="openFuel()">Fuel save</button>
           <button onclick="openLaps()">Lap log</button>
+          <button onclick="openDrivers()">Driver load</button>
         </div>
         <p class="note">Locks past stints, regenerates the rest of the race.</p>
         <div id="evLog" class="ev-log"></div>
@@ -121,6 +122,16 @@
     <h2>Car condition</h2>
     <div id="dmgDetails"></div>
     <div id="dmgRec" class="rec"></div>
+  </div>
+</div>
+
+<!-- driver load modal -->
+<div class="modal-bg" id="drvModal" onclick="if(event.target===this)closeDrivers()">
+  <div class="modal">
+    <button class="x" onclick="closeDrivers()">✕</button>
+    <h2>Driver load — planned</h2>
+    <p class="note" style="margin-top:0">Stints, laps and time per driver in the current plan. Balance swaps before the race.</p>
+    <div id="drvBody"></div>
   </div>
 </div>
 
@@ -506,6 +517,32 @@ function exportLapCsv(){
 }
 function openLaps(){ renderLapLog(); $('lapModal').classList.add('open'); }
 function closeLaps(){ $('lapModal').classList.remove('open'); }
+
+// ---- driver load (planned stints per driver) ----
+function renderDrivers(){
+  const plan = currentPlan;
+  const by = {};
+  plan.stints.forEach((s,i)=>{
+    const next = plan.stints[i+1];
+    const end = next ? next.in_time_s : plan.finish_time_s;
+    const dur = Math.max(0, end - s.in_time_s);
+    const d = s.driver || '—';
+    by[d] = by[d] || {stints:0, laps:0, time:0};
+    by[d].stints++; by[d].laps += (s.target_laps||0); by[d].time += dur;
+  });
+  const names = (cfg.driver_names && cfg.driver_names.length) ? cfg.driver_names : Object.keys(by);
+  const totalTime = Object.values(by).reduce((a,b)=>a+b.time,0) || 1;
+  const rows = names.map(d=>{
+    const v = by[d] || {stints:0,laps:0,time:0};
+    const share = Math.round(v.time/totalTime*100);
+    return `<tr><td>${d}</td><td>${v.stints}</td><td>${v.laps}</td><td>${hms(v.time)}</td>`+
+      `<td><div class="loadbar"><i style="width:${share}%"></i></div><span class="ls">${share}%</span></td></tr>`;
+  }).join('');
+  $('drvBody').innerHTML = `<table class="laptbl"><thead><tr><th>Driver</th><th>Stints</th>`+
+    `<th>Laps</th><th>Time</th><th>Share</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+function openDrivers(){ renderDrivers(); $('drvModal').classList.add('open'); }
+function closeDrivers(){ $('drvModal').classList.remove('open'); }
 
 // ---- live sync: receive telemetry/sim state and re-render ----
 const LIVE_FIELDS = ['fuel_now','laps_done','stint_lap','avg_lap_live','elapsed_s',
