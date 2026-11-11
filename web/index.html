@@ -74,6 +74,7 @@
         <div class="note" id="tireNote"></div>
         <div class="kv"><span class="k">Current set wear</span><span class="v" id="tireWear">—</span></div>
         <div class="kv"><span class="k">Laps on set</span><span class="v" id="tireLaps">—</span></div>
+        <div class="kv"><span class="k">Wear-out in</span><span class="v" id="wearOut">—</span></div>
       </div>
       <div class="panel">
         <h2>Events</h2>
@@ -205,9 +206,17 @@ function render(){
   de.className='v '+(dsum.mandatory||dsum.severe ? 'bad' : dsum.worst===0 ? 'ok' : 'warn');
   const pe=$('pen'); pe.textContent = state.penalties>0 ? state.penalties : 'none';
   pe.className='v '+(state.penalties>0?'bad':'ok');
-  // tires extra
-  $('tireWear').textContent = state.tire_wear_pct ? state.tire_wear_pct+'%' : '—';
+  // tires extra + wear-out projection (linear from worst wheel)
+  const worstWear = Math.max(0, ...state.wheels.map(w=>w.wear||0));
+  $('tireWear').textContent = Math.round(worstWear*100)+'%';
   $('tireLaps').textContent = state.laps_on_tires || 0;
+  const rate = worstWear / Math.max(1, state.laps_on_tires);     // wear fraction per lap
+  const lapsToLimit = rate>0 ? Math.floor((1.0 - worstWear)/rate) : null;
+  const wo=$('wearOut');
+  wo.textContent = lapsToLimit==null ? '—' : '~'+lapsToLimit+' laps';
+  const tyreLimited = lapsToLimit!=null && lapsToLimit < m.pit_in_laps;
+  wo.style.color = tyreLimited ? 'var(--bad)' : lapsToLimit!=null && lapsToLimit<8 ? 'var(--warn)' : '';
+  if(tyreLimited) wo.textContent += ' · tyre-limited';
 
   const over = plan.tires_over_budget, pct=Math.min(100,plan.tires_used/cfg.tire_budget*100);
   $('tireCount').textContent = plan.tires_used+' / '+cfg.tire_budget;
