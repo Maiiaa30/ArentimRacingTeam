@@ -242,6 +242,16 @@ tr.active{background:rgba(225,6,0,.08)} tr.active td:first-child{border-left:2px
 .dmg-row .dv{font-weight:700;font-variant-numeric:tabular-nums}
 .dmg-row .dv.ok{color:var(--txt)} .dmg-row .dv.warn{color:var(--warn)} .dmg-row .dv.bad{color:var(--bad)}
 .dmg-row .dv.rep{color:var(--accent)}
+.dmg-row.total{border-bottom:2px solid var(--line2);margin-bottom:4px;padding-bottom:9px}
+.dmg-row.total span:first-child{font-weight:700;color:var(--txt);text-transform:uppercase;
+  font-size:11px;letter-spacing:1px}
+.dmg-row.total .dv{font-size:18px}
+/* car-condition headline */
+.cond-head{display:flex;align-items:baseline;gap:12px;margin:0 0 16px;
+  font-family:var(--sans);font-size:14px;color:var(--mut);letter-spacing:.5px}
+.cond-head b{font-family:var(--mono);font-size:30px;font-weight:800;line-height:1}
+.cond-head b.ok{color:var(--ok)} .cond-head b.warn{color:var(--warn)} .cond-head b.bad{color:var(--bad)}
+.cond-head .cond-sub{font-family:var(--mono);font-size:12px;color:var(--dim)}
 .tyre-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .tyre{display:flex;align-items:center;gap:10px;background:#0d131b;border:1px solid var(--line);
   border-radius:9px;padding:9px 10px}
@@ -424,8 +434,11 @@ label.fld{display:flex;justify-content:space-between;align-items:center;gap:10px
 .cls-row .car{min-width:230px}
 .mbadge{display:inline-flex;align-items:center;justify-content:center;
   width:42px;height:42px;border-radius:8px;margin-right:12px;vertical-align:middle;
-  flex:0 0 auto;background:transparent}
-.mlogo{max-width:38px;max-height:38px;object-fit:contain;display:block}
+  flex:0 0 auto;padding:4px;
+  /* soft light plate so dark logos (Mercedes star, Aston wings) stay visible */
+  background:radial-gradient(circle at 50% 40%, #ffffff 0%, #e9edf3 100%);
+  box-shadow:0 1px 4px rgba(0,0,0,.35),inset 0 0 0 1px rgba(255,255,255,.5)}
+.mlogo{max-width:34px;max-height:34px;object-fit:contain;display:block}
 /* monogram fallback (no logo file): subtle neutral chip, brand-colour letters */
 .mbadge.nologo{background:#0d131b;border:1px solid var(--line2);color:var(--mc);
   font-family:var(--mono);font-weight:800;font-size:13px;letter-spacing:.5px}
