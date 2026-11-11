@@ -73,7 +73,6 @@
         <h2>Status</h2>
         <div class="nextstop" id="nextStop"></div>
         <div class="kv"><span class="k">On track</span><span class="v" id="driver">—</span></div>
-        <div class="kv"><span class="k">Next driver</span><span class="v" id="nextDriver">—</span></div>
         <div class="kv"><span class="k">Stint left</span><span class="v" id="stintLeft">—</span></div>
         <div class="kv"><span class="k">Stint time</span><span class="v" id="stintTime">—</span></div>
         <div class="kv"><span class="k">Laps left</span><span class="v" id="lapsLeft">—</span></div>
@@ -457,7 +456,7 @@ function render(){
   $('driver').textContent = state.current_driver || '—';
   $('stintTime').textContent = state.stint_time_s!=null ? hms(state.stint_time_s) : '—';
   const nextStint = plan.stints[activeIdx+1];
-  $('nextDriver').textContent = nextStint ? nextStint.driver : '—';
+  { const nd=$('nextDriver'); if(nd) nd.textContent = nextStint ? nextStint.driver : '—'; }
   // time left in THIS stint before the swap/pit (real elapsed vs planned stint end)
   const sl = $('stintLeft');
   if(sl){

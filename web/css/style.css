@@ -347,17 +347,38 @@ label.fld{display:flex;justify-content:space-between;align-items:center;gap:10px
   .twheels{margin-top:8px;gap:5px}
   .tw{padding:4px 3px}
   .tw-pct{font-size:14px}
+  /* reclaim the height the Next-Stop card adds so the board still fits one screen */
+  .kv{padding:5px 2px}
+  .nextstop{margin-bottom:7px;padding:6px 10px}
+  .ns-main{font-size:13px}
 }
 /* very short windows (not fullscreen): shrink the hero + gaps so it still fits */
 @media(min-width:901px) and (max-height:980px){
   .wrap{gap:8px;padding:8px clamp(12px,2vw,20px)}
   .big3 .stat{padding:10px 16px}
-  .big3 .val{font-size:clamp(34px,4.6vw,58px)}
+  .big3 .val{font-size:clamp(30px,4vw,48px)}
   .big3 .label{font-size:11px}
   .strip{gap:8px} .mini{padding:7px 11px}
   .ev-log{max-height:62px}
   .twheels{margin-top:6px}
   .panel{padding:12px 14px} .panel h2{margin:0 0 8px}
+  /* tightest tier — keep the Next-Stop card but squeeze the rest hard */
+  .kv{padding:4px 2px;font-size:13px}
+  .kv .v{font-size:15px}
+  .nextstop{margin-bottom:6px;padding:5px 9px}
+  .ns-head{margin-bottom:2px}
+  .ns-main{font-size:12px;line-height:1.25}
+  .btns{gap:6px}
+  .btns button{padding:7px 10px}
+  .big3 .val{font-size:clamp(28px,3.6vw,44px)}
+  .big3 .stat{padding:8px 16px}
+  .strip{gap:6px} .mini{padding:5px 9px}
+  .wx-strip{gap:8px}
+  .tw{padding:2px 3px} .twheels{gap:4px;margin-top:5px}
+  .ev-log{max-height:54px}
+  /* free horizontal room so long driver-name values stay on ONE line (no wrap) */
+  .kv .k{font-size:10px;letter-spacing:.5px}
+  .kv .v{font-size:14px}
 }
 @media(max-width:560px){
   .big3{grid-template-columns:1fr} .stat{padding:14px 10px}
