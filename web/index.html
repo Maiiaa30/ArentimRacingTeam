@@ -988,12 +988,16 @@ function openTimeline(){ renderTimeline(); $('tlModal').classList.add('open'); }
 function closeTimeline(){ $('tlModal').classList.remove('open'); }
 
 // ---- live sync: receive telemetry/sim state and re-render ----
+// NOTE: stint_time_s / laps_on_tires / last_pit_lap are DERIVED on the dashboard
+// from pit transitions (the game doesn't expose them), so they're intentionally
+// NOT merged from the feed — otherwise the bridge's null would wipe the derived value.
 const LIVE_FIELDS = ['fuel_now','fuel_capacity','virtual_energy','state_of_charge','laps_done','stint_lap','avg_lap_live','elapsed_s',
-  'current_driver','stint_time_s','last_lap_s','best_lap_s','position','gap_ahead_s','gap_behind_s',
+  'current_driver','last_lap_s','best_lap_s','position','gap_ahead_s','gap_behind_s',
   'weather_now','penalties','scheduled_stops','aero_pct','body_pct','susp_pct','tyres_pct','repair_s',
-  'parts_detached','last_impact_mag','last_impact_ago_s','tire_wear_pct','laps_on_tires','last_pit_lap',
+  'parts_detached','last_impact_mag','last_impact_ago_s','tire_wear_pct',
   'flag','in_pits','session_remaining_s','track_temp','air_temp','lap_delta_s','cls_position'];
 let _syncInit = true, _lastFeed = null, _pitActive = false;
+let _stintStartLap = null, _stintStartEl = null;   // for derived stint/tyre context
 let _lastRegenLap = -1, _lastRegenWx = null;
 function updateConn(){
   const el = $('conn'); if(!el) return;
@@ -1012,8 +1016,19 @@ PitDB.onState(s => {
   // pit auto-detect: in_pits false->true = entry, true->false = exit
   if(s.in_pits !== undefined){
     if(s.in_pits && !_pitActive){ _pitActive = true; logEvent('Pit entry (lap '+state.laps_done+')'); }
-    else if(!s.in_pits && _pitActive){ _pitActive = false; logEvent('Pit exit — rolling'); }
+    else if(!s.in_pits && _pitActive){
+      _pitActive = false; logEvent('Pit exit — rolling');
+      // new stint begins: reset the derived tyre/stint baseline
+      state.last_pit_lap = state.laps_done;
+      _stintStartLap = state.laps_done;
+      _stintStartEl = state.elapsed_s;
+    }
   }
+  // seed the stint baseline on the very first feed (race already running)
+  if(_stintStartLap==null){ _stintStartLap = state.laps_done||0; _stintStartEl = state.elapsed_s||0; }
+  // derived (game doesn't expose these): laps on current tyres + time on this stint
+  state.laps_on_tires = (state.laps_done!=null) ? Math.max(0, state.laps_done - _stintStartLap) : null;
+  state.stint_time_s  = (state.elapsed_s!=null && _stintStartEl!=null) ? Math.max(0, state.elapsed_s - _stintStartEl) : null;
   _lastFeed = Date.now(); updateConn();
   if(document.getElementById('standModal').classList.contains('open')) renderStandings();
   if(_syncInit){

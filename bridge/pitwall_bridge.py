@@ -259,9 +259,18 @@ def read_state(info):
     last_impact_mag = round(imag, 1) if imag else None
     last_impact_ago_s = round(et - iet, 1) if (iet and iet > 0 and et) else None
 
-    # gap to car ahead (real). gap behind isn't directly on our own row in LMU.
+    # gap to car ahead (real). gap behind: derive from the field (car one place back).
     gap_ahead = g(scor, "mTimeBehindNext")
     gap_ahead = round(gap_ahead, 3) if (gap_ahead and gap_ahead > 0) else None
+    gap_behind = None
+    try:
+        ours = next((r for r in rivals if r.get("is_us")), None)
+        if ours and ours.get("gap_s") is not None and place is not None:
+            behind = next((r for r in rivals if r.get("pos") == place + 1), None)
+            if behind and behind.get("gap_s") is not None:
+                gap_behind = round(behind["gap_s"] - ours["gap_s"], 3)
+    except Exception:
+        pass
 
     return {
         "fuel_now": fuel,
@@ -277,7 +286,7 @@ def read_state(info):
         "position": place,
         "cls_position": place,
         "gap_ahead_s": gap_ahead,
-        "gap_behind_s": None,                        # LMU: not exposed for our own car
+        "gap_behind_s": gap_behind,                  # derived from the car one place back
         "penalties": g(scor, "mNumPenalties"),
         "scheduled_stops": g(tele, "mScheduledStops"),
         "in_pits": bool(in_pits) if in_pits is not None else None,
@@ -448,14 +457,26 @@ def main():
 
     period = 1.0 / max(0.5, args.hz)
     tick = 0
+    errstreak = 0
     print(f"[bridge] start — print={args.do_print} demo={args.demo} supabase={args.supabase}")
     try:
         while True:
-            state = demo_state(tick) if args.demo else read_state(info)
+            # One bad frame (game paused, menu, momentary shared-memory glitch) must
+            # never kill a 6-hour run: catch, log sparsely, keep going.
+            try:
+                state = demo_state(tick) if args.demo else read_state(info)
+                errstreak = 0
+            except Exception as e:
+                errstreak += 1
+                if errstreak in (1, 10) or errstreak % 100 == 0:
+                    print(f"[bridge] read error (x{errstreak}): {e}", file=sys.stderr)
+                time.sleep(period)
+                tick += 1
+                continue
             if args.do_print:
                 print(json.dumps(state, indent=2, default=str))
             if args.supabase:
-                ok = push_supabase(state)
+                ok = push_supabase(state)       # already swallows its own errors
                 if args.do_print:
                     print(f"[bridge] supabase push: {'ok' if ok else 'FAILED'}")
             tick += 1

@@ -64,11 +64,28 @@ window.PitDB = (() => {
       if(!error && data && data.data) emit(data.data);
 
       // realtime updates
-      client.channel('race_state_live')
-        .on('postgres_changes',
-            { event:'*', schema:'public', table:'race_state', filter:'id=eq.1' },
-            payload => { const d = payload.new && payload.new.data; if(d) emit(d); })
-        .subscribe();
+      // Realtime channel with auto-reconnect — over a 6h race the websocket can
+      // drop (network blip, laptop sleep). On any non-OK status we rebuild the
+      // channel after a short backoff. The 3s poll below keeps data flowing
+      // regardless, so a dropped socket never blanks the board.
+      let _reconnecting = false;
+      function subscribeRealtime(){
+        const ch = client.channel('race_state_live_' + Date.now())
+          .on('postgres_changes',
+              { event:'*', schema:'public', table:'race_state', filter:'id=eq.1' },
+              payload => { const d = payload.new && payload.new.data; if(d) emit(d); })
+          .subscribe(status => {
+            if((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') && !_reconnecting){
+              _reconnecting = true;
+              setTimeout(() => {
+                _reconnecting = false;
+                try { client.removeChannel(ch); } catch(_){}
+                subscribeRealtime();
+              }, 5000);
+            }
+          });
+      }
+      subscribeRealtime();
 
       // Safety-net poll: if realtime isn't enabled on the table (common), the board
       // still updates on its own without a page refresh. Dedupe (emit) skips the
