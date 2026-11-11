@@ -130,16 +130,27 @@ def read_state(info):
         vehicles = info.Rf2Scor.mVehicles
         n = g(sinfo, "mNumVehicles", len(vehicles)) if sinfo is not None else len(vehicles)
         my_id = g(scor, "mID")
+        def dec(x):
+            return x.decode("utf-8", "ignore") if isinstance(x, (bytes, bytearray)) else x
         for v in list(vehicles)[: max(0, int(n or 0))]:
-            nm = g(v, "mDriverName") or b""
-            nm = nm.decode("utf-8", "ignore") if isinstance(nm, (bytes, bytearray)) else nm
+            driver = dec(g(v, "mDriverName") or b"")
+            car = dec(g(v, "mVehicleName") or b"")          # e.g. "Porsche 911 GT3 R #92"
+            cls = dec(g(v, "mVehicleClass") or b"") or "GT3"  # e.g. "LMGT3" / "Hypercar"
+            manuf = car.split()[0] if car else ""           # first token ~ manufacturer
             vll = g(v, "mLastLapTime")
+            vbl = g(v, "mBestLapTime")
             rivals.append({
                 "pos": g(v, "mPlace"),
-                "name": nm,
-                "cls": "GT3",
-                "gap_s": g(v, "mTimeBehindNext"),
+                "name": car or driver,
+                "num": None,
+                "manuf": manuf,
+                "model": car,
+                "team": car,                                 # rF2 has no team field; reuse car name
+                "driver": driver,
+                "cls": cls,
+                "gap_s": g(v, "mTimeBehindLeader"),
                 "last_lap_s": None if not vll or vll < 0 else round(vll, 3),
+                "best_lap_s": None if not vbl or vbl < 0 else round(vbl, 3),
                 "laps": g(v, "mTotalLaps"),
                 "in_pits": bool(g(v, "mInPits", 0)),
                 "is_us": (g(v, "mID") == my_id) if my_id is not None else False,
@@ -204,17 +215,24 @@ def demo_state(tick):
             "s3": round((95.0 * (1.12 if wet else 1.0)) * 0.28, 3),
         },
         "rivals": [
-            {"pos": p, "name": nm, "cls": cl,
-             "gap_s": 0 if nm == "#30 ARENTIM" else round(p * 3.5, 1),
+            {"pos": p, "num": num, "manuf": mf, "model": mdl, "team": tm, "driver": dr,
+             "name": "#" + num + " " + mf, "cls": cl,
+             "gap_s": 0 if num == "30" else round(p * 3.5, 1),
              "last_lap_s": round((95.0 - (8 if cl == "Hypercar" else 0)) + p * 0.2, 3),
+             "best_lap_s": round((95.0 - (8 if cl == "Hypercar" else 0)) - 0.4, 3),
              "laps": lap + (int(lap * 0.08) if cl == "Hypercar" else 0),
-             "in_pits": False, "is_us": nm == "#30 ARENTIM"}
-            for p, (nm, cl) in enumerate([
-                ("#7 Toyota", "Hypercar"), ("#51 Ferrari", "Hypercar"),
-                ("#2 Cadillac", "Hypercar"), ("#6 Porsche", "Hypercar"),
-                ("#92 Porsche", "GT3"), ("#30 ARENTIM", "GT3"),
-                ("#15 BMW", "GT3"), ("#88 Lambo", "GT3"),
-                ("#46 Aston", "GT3"), ("#777 Merc", "GT3"),
+             "in_pits": False, "is_us": num == "30"}
+            for p, (num, mf, mdl, tm, dr, cl) in enumerate([
+                ("7", "Toyota", "GR010 Hybrid", "Toyota Gazoo Racing", "Kobayashi", "Hypercar"),
+                ("51", "Ferrari", "499P", "Ferrari AF Corse", "Pier Guidi", "Hypercar"),
+                ("2", "Cadillac", "V-Series.R", "Cadillac Racing", "Bamber", "Hypercar"),
+                ("6", "Porsche", "963", "Porsche Penske", "Estre", "Hypercar"),
+                ("92", "Porsche", "911 GT3 R", "Manthey PureRxcing", "Malykhin", "GT3"),
+                ("30", "Arentim", "GT3", "Arentim Racing Team", "", "GT3"),
+                ("15", "BMW", "M4 GT3", "WRT", "Rossi", "GT3"),
+                ("88", "Lamborghini", "Huracán GT3", "Iron Lynx", "Perera", "GT3"),
+                ("46", "Aston", "Vantage GT3", "Heart of Racing", "Riberas", "GT3"),
+                ("777", "Mercedes", "AMG GT3", "AlManar by GetSpeed", "Schiller", "GT3"),
             ], start=1)
         ],
         "updated_at": _now_iso(),

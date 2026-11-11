@@ -141,7 +141,7 @@
 
 <!-- standings / rivals modal -->
 <div class="modal-bg" id="standModal" onclick="if(event.target===this)closeStandings()">
-  <div class="modal wide">
+  <div class="modal wide xl">
     <button class="x" onclick="closeStandings()">✕</button>
     <h2>Standings &amp; rivals</h2>
     <p class="note" style="margin-top:0">Live field — gaps, pace and pit status. Our car highlighted. Sector times for our last lap below.</p>
@@ -268,6 +268,21 @@ function classMeta(c){
   const k=(c||'').toUpperCase();
   return CLASS_META[k] || {name:(c||'Other'),abbr:(c||'?'),color:'#7d8795'};
 }
+// manufacturer colour + 3-letter monogram (offline-safe stand-in for a logo)
+const MANUF = {
+  'TOYOTA':{c:'#EB0A1E',s:'TOY'}, 'FERRARI':{c:'#D40000',s:'FER'},
+  'CADILLAC':{c:'#B9945A',s:'CAD'}, 'PORSCHE':{c:'#C9A227',s:'POR'},
+  'BMW':{c:'#0066B1',s:'BMW'}, 'LAMBORGHINI':{c:'#D8B500',s:'LAM'}, 'LAMBO':{c:'#D8B500',s:'LAM'},
+  'MERCEDES':{c:'#00A19C',s:'MER'}, 'ASTON':{c:'#00594F',s:'AST'}, 'ASTON MARTIN':{c:'#00594F',s:'AST'},
+  'PEUGEOT':{c:'#1B3C78',s:'PEU'}, 'ALPINE':{c:'#0055A4',s:'ALP'}, 'AUDI':{c:'#BB0A30',s:'AUD'},
+  'MCLAREN':{c:'#FF8000',s:'MCL'}, 'CORVETTE':{c:'#C5A24A',s:'COR'}, 'ARENTIM':{c:'#e10600',s:'ART'},
+};
+function manufMeta(name){
+  const k=(name||'').toUpperCase();
+  if(MANUF[k]) return MANUF[k];
+  for(const key in MANUF){ if(k.includes(key)) return MANUF[key]; }
+  return {c:'#7d8795', s:(name||'?').slice(0,3).toUpperCase()};
+}
 function openStandings(){ const m=$('standModal'); m.classList.add('open'); renderStandings(); }
 function closeStandings(){ $('standModal').classList.remove('open'); }
 function renderStandings(){
@@ -286,24 +301,39 @@ function renderStandings(){
       const m=classMeta(nm);
       const rows=groups[nm].slice().sort((a,b)=>(a.pos||99)-(b.pos||99));
       body+=`<tbody class="cls-group" style="--cc:${m.color}">`;
-      body+=`<tr class="cls-head"><td colspan="6"><span class="cls-dot"></span>`+
+      body+=`<tr class="cls-head"><td colspan="9"><span class="cls-dot"></span>`+
         `${m.name}<span class="cls-tag">${m.abbr}</span><span class="cls-n">${rows.length} cars</span></td></tr>`;
+      let prevGap=null;
       rows.forEach((r,ci)=>{
         const us=r.is_us?' us':'';
+        const mf=manufMeta(r.manuf||r.name);
+        const car=r.model ? ('#'+(r.num||'?')+' '+(r.manuf||'')+' '+r.model).trim() : (r.name||'—');
+        const team=r.team||'';
+        const driver=r.is_us ? (r.driver||state.current_driver||'—') : (r.driver||'—');
         const gap=r.is_us?'—':(r.gap_s!=null?('+'+(+r.gap_s).toFixed(1)):'—');
+        // interval = gap to the car ahead in class
+        let intv='—';
+        if(ci===0) intv='LEADER';
+        else if(!r.is_us && r.gap_s!=null && prevGap!=null) intv='+'+(r.gap_s-prevGap).toFixed(1);
+        if(!r.is_us && r.gap_s!=null) prevGap=r.gap_s;   // our gap is a placeholder; don't skew the next interval
         const pit=r.in_pits?'<span class="tag-pit">PIT</span>':'';
         body+=`<tr class="cls-row${us}">`+
           `<td class="rk"><b>${ci+1}</b><span class="opos">P${r.pos}</span></td>`+
-          `<td class="car">${r.name||'—'} ${pit}</td>`+
+          `<td class="car"><span class="mbadge" style="--mc:${mf.c}">${mf.s}</span>`+
+            `<span class="car-txt"><span class="car-nm">${car} ${pit}</span>`+
+            `<span class="car-team">${team}</span></span></td>`+
+          `<td class="drv">${driver}</td>`+
           `<td class="cls"><span class="cls-chip">${m.abbr}</span></td>`+
-          `<td>${gap}</td>`+
+          `<td class="gp">${gap}</td>`+
+          `<td class="iv ${intv==='LEADER'?'lead':''}">${intv}</td>`+
           `<td>${r.last_lap_s!=null?fmtLap(+r.last_lap_s):'—'}</td>`+
+          `<td class="dim2">${r.best_lap_s!=null?fmtLap(+r.best_lap_s):'—'}</td>`+
           `<td>${r.laps!=null?r.laps:'—'}</td></tr>`;
       });
       body+=`</tbody>`;
     });
-    sb.innerHTML=`<table class="laptbl stand"><thead><tr><th>Pos</th><th>Car</th><th>Cls</th>`+
-      `<th>Gap</th><th>Last</th><th>Laps</th></tr></thead>${body}</table>`;
+    sb.innerHTML=`<table class="laptbl stand"><thead><tr><th>Pos</th><th>Car / Team</th><th>Driver</th>`+
+      `<th>Cls</th><th>Gap</th><th>Int</th><th>Last</th><th>Best</th><th>Laps</th></tr></thead>${body}</table>`;
   }
   // our sectors
   const se=$('sectorBody'); const s=state.sectors;

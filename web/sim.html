@@ -78,24 +78,31 @@
 function genRivals(myPos, myLast, myLap){
   // mixed field: Hypercars (faster) up top, then LMGT3; our car is GT3 #30
   const field=[
-    {name:'#7 Toyota',   cls:'Hypercar'}, {name:'#51 Ferrari', cls:'Hypercar'},
-    {name:'#2 Cadillac', cls:'Hypercar'}, {name:'#6 Porsche',  cls:'Hypercar'},
-    {name:'#92 Porsche', cls:'GT3'}, {name:'#30 ARENTIM', cls:'GT3'},
-    {name:'#15 BMW',     cls:'GT3'}, {name:'#88 Lambo',   cls:'GT3'},
-    {name:'#46 Aston',   cls:'GT3'}, {name:'#777 Merc',   cls:'GT3'},
+    {num:'7',  manuf:'Toyota',   model:'GR010 Hybrid', team:'Toyota Gazoo Racing', driver:'Kobayashi', cls:'Hypercar'},
+    {num:'51', manuf:'Ferrari',  model:'499P',         team:'Ferrari AF Corse',    driver:'Pier Guidi', cls:'Hypercar'},
+    {num:'2',  manuf:'Cadillac', model:'V-Series.R',   team:'Cadillac Racing',     driver:'Bamber',     cls:'Hypercar'},
+    {num:'6',  manuf:'Porsche',  model:'963',          team:'Porsche Penske',      driver:'Estre',      cls:'Hypercar'},
+    {num:'92', manuf:'Porsche',  model:'911 GT3 R',    team:'Manthey PureRxcing',  driver:'Malykhin',   cls:'GT3'},
+    {num:'30', manuf:'Arentim',  model:'GT3',          team:'Arentim Racing Team', driver:'',           cls:'GT3'},
+    {num:'15', manuf:'BMW',      model:'M4 GT3',        team:'WRT',                 driver:'Rossi',      cls:'GT3'},
+    {num:'88', manuf:'Lamborghini', model:'Huracán GT3', team:'Iron Lynx',         driver:'Perera',     cls:'GT3'},
+    {num:'46', manuf:'Aston',    model:'Vantage GT3',   team:'Heart of Racing',     driver:'Riberas',    cls:'GT3'},
+    {num:'777',manuf:'Mercedes', model:'AMG GT3',       team:'AlManar by GetSpeed', driver:'Schiller',   cls:'GT3'},
   ];
   const out=[]; let gap=0;
   field.forEach((c,i)=>{
     const p=i+1;
-    const mine = c.name==='#30 ARENTIM';
+    const mine = c.num==='30';
     const hyper = c.cls==='Hypercar';
     gap += (i===0?0: (hyper?1.5:2) + Math.random()*6);
-    // hypercars ~8s/lap faster than GT3
-    const base = (myLast||95) - (hyper?8:0);
+    const base = (myLast||95) - (hyper?8:0);   // hypercars ~8s/lap faster
+    const last = +( base + (Math.random()*2-0.8) ).toFixed(3);
     out.push({
-      pos:p, name:c.name, cls:c.cls,
+      pos:p, num:c.num, manuf:c.manuf, model:c.model, team:c.team, driver:c.driver,
+      name:'#'+c.num+' '+c.manuf, cls:c.cls,
       gap_s: mine?0: +gap.toFixed(1),
-      last_lap_s: +( base + (Math.random()*2-0.8) ).toFixed(3),
+      last_lap_s: last,
+      best_lap_s: +(base - 0.4).toFixed(3),
       laps: (myLap||0) + (hyper?Math.ceil((myLap||0)*0.08):0) - (Math.random()<0.2?1:0),
       in_pits: Math.random()<0.08, is_us: mine
     });
