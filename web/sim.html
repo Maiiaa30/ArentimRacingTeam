@@ -63,7 +63,8 @@
 </div>
 <script src="js/config.js"></script>
 <script src="js/gate.js"></script>
-<!-- optional: cross-device sync. Create web/supabase.local.js from the .example to enable. -->
+<!-- cross-device sync. supabase.config.js = public keys (written at deploy); supabase.local.js = local override w/ passcode. -->
+<script src="supabase.config.js" onerror="void 0"></script>
 <script src="supabase.local.js" onerror="void 0"></script>
 <script src="js/supabase.js"></script>
 <script>
