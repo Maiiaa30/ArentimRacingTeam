@@ -110,7 +110,7 @@
 </div>
 
 <!-- fuel-save modal -->
-<div class="modal-bg" id="fuelModal" onclick="if(event.target===this)closeFuel()">
+<div class="modal-bg" id="fuelModal">
   <div class="modal">
     <button class="x" onclick="closeFuel()">✕</button>
     <h2>Fuel save</h2>
@@ -119,7 +119,7 @@
 </div>
 
 <!-- what-if sandbox modal -->
-<div class="modal-bg" id="wifModal" onclick="if(event.target===this)closeWif()">
+<div class="modal-bg" id="wifModal">
   <div class="modal">
     <button class="x" onclick="closeWif()">✕</button>
     <h2>What-if sandbox</h2>
@@ -130,7 +130,7 @@
 </div>
 
 <!-- damage detail modal -->
-<div class="modal-bg" id="dmgModal" onclick="if(event.target===this)closeDamage()">
+<div class="modal-bg" id="dmgModal">
   <div class="modal">
     <button class="x" onclick="closeDamage()">✕</button>
     <h2>Car condition</h2>
@@ -140,7 +140,7 @@
 </div>
 
 <!-- standings / rivals modal -->
-<div class="modal-bg" id="standModal" onclick="if(event.target===this)closeStandings()">
+<div class="modal-bg" id="standModal">
   <div class="modal wide xl">
     <button class="x" onclick="closeStandings()">✕</button>
     <h2>Standings &amp; rivals</h2>
@@ -151,7 +151,7 @@
 </div>
 
 <!-- race timeline modal -->
-<div class="modal-bg" id="tlModal" onclick="if(event.target===this)closeTimeline()">
+<div class="modal-bg" id="tlModal">
   <div class="modal wide">
     <button class="x" onclick="closeTimeline()">✕</button>
     <h2>Race timeline — planned</h2>
@@ -162,7 +162,7 @@
 </div>
 
 <!-- setup / config modal -->
-<div class="modal-bg" id="setupModal" onclick="if(event.target===this)closeSetup()">
+<div class="modal-bg" id="setupModal">
   <div class="modal wide">
     <button class="x" onclick="closeSetup()">✕</button>
     <h2>Race setup</h2>
@@ -176,7 +176,7 @@
 </div>
 
 <!-- driver load modal -->
-<div class="modal-bg" id="drvModal" onclick="if(event.target===this)closeDrivers()">
+<div class="modal-bg" id="drvModal">
   <div class="modal">
     <button class="x" onclick="closeDrivers()">✕</button>
     <h2>Driver load — planned</h2>
@@ -186,7 +186,7 @@
 </div>
 
 <!-- lap log modal -->
-<div class="modal-bg" id="lapModal" onclick="if(event.target===this)closeLaps()">
+<div class="modal-bg" id="lapModal">
   <div class="modal wide">
     <button class="x" onclick="closeLaps()">✕</button>
     <h2>Lap log</h2>
@@ -269,19 +269,29 @@ function classMeta(c){
   return CLASS_META[k] || {name:(c||'Other'),abbr:(c||'?'),color:'#7d8795'};
 }
 // manufacturer colour + 3-letter monogram (offline-safe stand-in for a logo)
+// c=brand colour, s=monogram fallback, g=logo slug (file in img/manuf/<g>.svg, '' = none)
 const MANUF = {
-  'TOYOTA':{c:'#EB0A1E',s:'TOY'}, 'FERRARI':{c:'#D40000',s:'FER'},
-  'CADILLAC':{c:'#B9945A',s:'CAD'}, 'PORSCHE':{c:'#C9A227',s:'POR'},
-  'BMW':{c:'#0066B1',s:'BMW'}, 'LAMBORGHINI':{c:'#D8B500',s:'LAM'}, 'LAMBO':{c:'#D8B500',s:'LAM'},
-  'MERCEDES':{c:'#00A19C',s:'MER'}, 'ASTON':{c:'#00594F',s:'AST'}, 'ASTON MARTIN':{c:'#00594F',s:'AST'},
-  'PEUGEOT':{c:'#1B3C78',s:'PEU'}, 'ALPINE':{c:'#0055A4',s:'ALP'}, 'AUDI':{c:'#BB0A30',s:'AUD'},
-  'MCLAREN':{c:'#FF8000',s:'MCL'}, 'CORVETTE':{c:'#C5A24A',s:'COR'}, 'ARENTIM':{c:'#e10600',s:'ART'},
+  'TOYOTA':{c:'#EB0A1E',s:'TOY',g:'toyota'}, 'FERRARI':{c:'#D40000',s:'FER',g:'ferrari'},
+  'CADILLAC':{c:'#B9945A',s:'CAD',g:'cadillac'}, 'PORSCHE':{c:'#C9A227',s:'POR',g:'porsche'},
+  'BMW':{c:'#0066B1',s:'BMW',g:'bmw'}, 'LAMBORGHINI':{c:'#D8B500',s:'LAM',g:'lamborghini'}, 'LAMBO':{c:'#D8B500',s:'LAM',g:'lamborghini'},
+  'MERCEDES':{c:'#00A19C',s:'MER',g:''}, 'ASTON':{c:'#00594F',s:'AST',g:'astonmartin'}, 'ASTON MARTIN':{c:'#00594F',s:'AST',g:'astonmartin'},
+  'PEUGEOT':{c:'#1B3C78',s:'PEU',g:'peugeot'}, 'ALPINE':{c:'#0055A4',s:'ALP',g:''}, 'AUDI':{c:'#BB0A30',s:'AUD',g:'audi'},
+  'MCLAREN':{c:'#FF8000',s:'MCL',g:'mclaren'}, 'CORVETTE':{c:'#C5A24A',s:'COR',g:'chevrolet'}, 'CHEVROLET':{c:'#C5A24A',s:'CHV',g:'chevrolet'},
+  'NISSAN':{c:'#C3002F',s:'NIS',g:'nissan'}, 'HONDA':{c:'#E40521',s:'HON',g:'honda'}, 'FORD':{c:'#00274E',s:'FOR',g:'ford'},
+  'ARENTIM':{c:'#e10600',s:'ART',g:''},
 };
 function manufMeta(name){
   const k=(name||'').toUpperCase();
   if(MANUF[k]) return MANUF[k];
   for(const key in MANUF){ if(k.includes(key)) return MANUF[key]; }
-  return {c:'#7d8795', s:(name||'?').slice(0,3).toUpperCase()};
+  return {c:'#7d8795', s:(name||'?').slice(0,3).toUpperCase(), g:''};
+}
+function badgeHtml(mf){
+  // real logo if we have one (white silhouette); else colour monogram. img onerror -> monogram.
+  if(mf.g) return `<span class="mbadge" style="--mc:${mf.c}">`+
+    `<img class="mlogo" src="img/manuf/${mf.g}.svg" alt="" `+
+    `onerror="this.parentNode.classList.add('nologo');this.remove();"><span class="mono">${mf.s}</span></span>`;
+  return `<span class="mbadge nologo" style="--mc:${mf.c}"><span class="mono">${mf.s}</span></span>`;
 }
 function openStandings(){ const m=$('standModal'); m.classList.add('open'); renderStandings(); }
 function closeStandings(){ $('standModal').classList.remove('open'); }
@@ -319,7 +329,7 @@ function renderStandings(){
         const pit=r.in_pits?'<span class="tag-pit">PIT</span>':'';
         body+=`<tr class="cls-row${us}">`+
           `<td class="rk"><b>${ci+1}</b><span class="opos">P${r.pos}</span></td>`+
-          `<td class="car"><span class="mbadge" style="--mc:${mf.c}">${mf.s}</span>`+
+          `<td class="car">${badgeHtml(mf)}`+
             `<span class="car-txt"><span class="car-nm">${car} ${pit}</span>`+
             `<span class="car-team">${team}</span></span></td>`+
           `<td class="drv">${driver}</td>`+
