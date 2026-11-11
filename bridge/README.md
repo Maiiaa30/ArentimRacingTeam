@@ -28,6 +28,14 @@ set SUPA_PASSCODE=your-shared-word         # must match race_secret.passcode
 python3 pitwall_bridge.py --supabase       # add --print to watch what's sent
 ```
 
+### Windows launchers (double-click)
+
+- **`validate-bridge.bat`** — runs `--print` only. No account, no secrets. Use first:
+  drive the car, confirm fields update, paste the output back to tune the mapping.
+- **`start-bridge.bat`** — feeds the live pit wall via Supabase. Holds the write
+  passcode, so it's **git-ignored** (not in the repo). Copy the filled one to the game
+  PC, or make it from `start-bridge.example.bat` and fill in your values.
+
 `--print` is the field-validation step: run it while driving and confirm `fuel_now`,
 `laps_done`, `last_lap_s`, `current_driver`, wheels, etc. actually populate. Anything
 that stays `null` isn't exposed by the game → enter it manually in the dashboard /

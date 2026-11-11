@@ -20,3 +20,7 @@ dist/
 *.swp
 .vscode/
 .idea/
+
+# filled bridge launcher (contains write passcode)
+start-bridge.bat
+bridge/start-bridge.bat
