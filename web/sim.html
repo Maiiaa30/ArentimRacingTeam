@@ -39,6 +39,12 @@
     <label class="fld">Penalties <input type="number" id="pen" value="0" oninput="upd()"></label>
     <label class="fld">Tire wear (%) <input type="number" id="tw" value="18" oninput="upd()"></label>
     <label class="fld">Laps on set <input type="number" id="los" value="13" oninput="upd()"></label>
+    <label class="fld">Flag
+      <select id="flag" onchange="upd()"><option value="green">green</option><option value="yellow">yellow</option><option value="fcy">FCY</option><option value="checkered">checkered</option></select>
+    </label>
+    <label class="fld">Track °C <input type="number" id="ttemp" value="28" oninput="upd()"></label>
+    <label class="fld">Air °C <input type="number" id="atemp" value="19" oninput="upd()"></label>
+    <label class="fld">In pits <input type="checkbox" id="inpit" onchange="upd()"></label>
     <div class="btns">
       <button onclick="lapTick()">+1 Lap</button>
       <button onclick="pit()">Pit stop</button>
@@ -68,13 +74,40 @@
 <script src="supabase.local.js" onerror="void 0"></script>
 <script src="js/supabase.js"></script>
 <script>
+// fabricate a plausible field of rivals around our position (dev only)
+function genRivals(myPos, myLast, myLap){
+  const names=['#7 Toyota','#51 Ferrari','#2 Cadillac','#6 Porsche','#15 BMW','#93 Peugeot','#35 Alpine','#12 Lambo'];
+  const N=8; const out=[]; let gap=0;
+  for(let i=0;i<N;i++){
+    const p=i+1;
+    const mine = p===myPos;
+    gap += (i===0?0: 2 + Math.random()*8);
+    out.push({
+      pos:p, name: mine?'#30 ARENTIM':names[i%names.length], cls:'GT3',
+      gap_s: mine?0: +gap.toFixed(1),
+      last_lap_s: +( (myLast||95) + (Math.random()*2-0.8) ).toFixed(3),
+      laps: (myLap||0) - (Math.random()<0.2?1:0),
+      in_pits: Math.random()<0.08, is_us: mine
+    });
+  }
+  return out;
+}
 function state(){
+  const ll_=+ll.value, bl_=+bl.value;
   return {
     fuel_now:+fuel.value, avg_lap_live:+lap.value, laps_done:+laps.value,
     stint_lap:+slap.value, elapsed_s:+el.value, weather_now:wx.value, current_driver:drv.value,
     position:+pos.value, gap_ahead_s:+ga.value, gap_behind_s:+gb.value,
-    last_lap_s:+ll.value, best_lap_s:+bl.value, damage_pct:+dmg.value, penalties:+pen.value,
+    last_lap_s:ll_, best_lap_s:bl_, damage_pct:+dmg.value, penalties:+pen.value,
     tire_wear_pct:+tw.value, laps_on_tires:+los.value,
+    // --- new real-telemetry fields ---
+    flag:flag.value, in_pits:inpit.checked,
+    session_remaining_s: Math.max(0, RACE_CONFIG.duration_s - (+el.value)),
+    track_temp:+ttemp.value, air_temp:+atemp.value,
+    sectors:{ s1:+(ll_*0.32).toFixed(3), s2:+(ll_*0.40).toFixed(3), s3:+(ll_*0.28).toFixed(3) },
+    lap_delta_s:+(ll_-bl_).toFixed(3),
+    cls_position:+pos.value,
+    rivals: genRivals(+pos.value, ll_, +laps.value),
     updated_at:new Date().toISOString()
   };
 }
@@ -110,8 +143,8 @@ function scDamage(){ dmg.value=Math.min(100, (+dmg.value||0)+25); pos.value=+pos
 function scReset(){
   if(_auto) toggleAuto();
   [['fuel',75],['lap',95],['laps',0],['slap',0],['el',0],['pos',4],['ga',3.2],['gb',5.8],
-   ['ll',95.42],['bl',94.18],['dmg',0],['pen',0],['tw',18],['los',13]].forEach(([id,v])=>{ document.getElementById(id).value=v; });
-  wx.value='dry'; drv.value='D1'; upd();
+   ['ll',95.42],['bl',94.18],['dmg',0],['pen',0],['tw',18],['los',13],['ttemp',28],['atemp',19]].forEach(([id,v])=>{ document.getElementById(id).value=v; });
+  wx.value='dry'; drv.value='D1'; flag.value='green'; inpit.checked=false; upd();
 }
 upd();
 </script>

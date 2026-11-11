@@ -333,3 +333,26 @@ label.fld{display:flex;justify-content:space-between;align-items:center;gap:10px
   .ev-log{max-height:none}
   .btns button{font-size:14px;padding:10px 14px}
 }
+
+/* ---- real-telemetry additions ---- */
+.chip.flag{font-weight:700}
+.chip.flag.f-green{color:#5fe08a;border-color:rgba(46,201,107,.45);background:rgba(46,201,107,.08)}
+.chip.flag.f-yellow{color:#ffce45;border-color:rgba(242,182,0,.5);background:rgba(242,182,0,.10)}
+.chip.flag.f-fcy{color:#ffb000;border-color:rgba(242,150,0,.6);background:rgba(242,150,0,.14);
+  animation:fcyblink 1.1s steps(1) infinite}
+.chip.flag.f-chk{color:var(--txt);border-color:var(--line2);
+  background:repeating-linear-gradient(45deg,#1a1f27 0 6px,#2b323d 6px 12px)}
+@keyframes fcyblink{50%{background:rgba(242,150,0,.30)}}
+.mini .delta{font-family:var(--mono);font-size:11px;font-weight:700;margin-left:6px;font-variant-numeric:tabular-nums}
+.mini .delta.ok{color:var(--ok)} .mini .delta.warn{color:var(--warn)} .mini .delta.bad{color:var(--bad)}
+.wx-right{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.wx-temp{font-family:var(--mono);font-size:11px;color:var(--mut);white-space:nowrap}
+/* standings modal */
+.laptbl.stand tr.us td{color:#7fe0a0;font-weight:700;background:rgba(46,201,107,.06)}
+.tag-pit{font-family:var(--mono);font-size:9px;font-weight:700;color:#0b0e13;background:#ffce45;
+  border-radius:3px;padding:1px 4px;margin-left:4px;vertical-align:middle}
+.sec-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px}
+.sec{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;
+  display:flex;flex-direction:column;gap:2px}
+.sec .sk{font-size:10px;letter-spacing:1px;color:var(--mut);text-transform:uppercase}
+.sec .sv{font-family:var(--mono);font-weight:700;font-variant-numeric:tabular-nums;font-size:15px}

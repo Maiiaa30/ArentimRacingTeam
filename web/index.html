@@ -10,8 +10,9 @@
 <header>
   <div class="brand"><span class="t">ARENTIM RACING TEAM</span><span class="s">PIT WALL</span></div>
   <div class="spacer"></div>
+  <span class="chip flag" id="flagChip" title="track flag">● GREEN</span>
   <span class="chip conn" id="conn" title="data link">● —</span>
-  <span class="chip clock" id="clock">--:--:--</span>
+  <span class="chip clock" id="clock" title="time remaining">--:--:--</span>
   <span class="chip wet" id="wx">DRY</span>
   <span class="chip tgt" id="target">fewest stops</span>
   <button class="chip btn" onclick="openSetup()" title="Race setup — enter real values">⚙ Setup</button>
@@ -31,7 +32,7 @@
     <div class="mini"><span class="k">Position</span><span class="v pos" id="pos">—</span></div>
     <div class="mini"><span class="k">Gap ahead</span><span class="v gap-a" id="gapA">—</span></div>
     <div class="mini"><span class="k">Gap behind</span><span class="v gap-b" id="gapB">—</span></div>
-    <div class="mini"><span class="k">Last lap</span><span class="v" id="lastLap">—</span></div>
+    <div class="mini"><span class="k">Last lap</span><span class="v" id="lastLap">—</span><span class="delta" id="lapDelta"></span></div>
     <div class="mini"><span class="k">Best lap</span><span class="v" id="bestLap">—</span></div>
     <div class="mini"><span class="k">Last pit (lap)</span><span class="v" id="lastPit">—</span></div>
     <div class="mini clickable" onclick="openDamage()" title="Click for damage detail"><span class="k">Damage ▸</span><span class="v" id="damage">—</span></div>
@@ -46,7 +47,10 @@
       <div class="wx-tip" id="wxTip"></div>
       <div class="wx-ticks" id="wxTicks"></div>
     </div>
-    <div class="wx-label" id="wxLabel">—</div>
+    <div class="wx-right">
+      <div class="wx-label" id="wxLabel">—</div>
+      <div class="wx-temp" id="wxTemp"></div>
+    </div>
   </div>
 
   <div class="grid mid">
@@ -95,6 +99,7 @@
           <button onclick="openLaps()">Lap log</button>
           <button onclick="openDrivers()">Driver load</button>
           <button onclick="openTimeline()">Timeline</button>
+          <button onclick="openStandings()">Standings</button>
         </div>
         <p class="note">Locks past stints, regenerates the rest of the race.</p>
         <div id="evLog" class="ev-log"></div>
@@ -130,6 +135,17 @@
     <h2>Car condition</h2>
     <div id="dmgDetails"></div>
     <div id="dmgRec" class="rec"></div>
+  </div>
+</div>
+
+<!-- standings / rivals modal -->
+<div class="modal-bg" id="standModal" onclick="if(event.target===this)closeStandings()">
+  <div class="modal wide">
+    <button class="x" onclick="closeStandings()">✕</button>
+    <h2>Standings &amp; rivals</h2>
+    <p class="note" style="margin-top:0">Live field — gaps, pace and pit status. Our car highlighted. Sector times for our last lap below.</p>
+    <div id="standBody"></div>
+    <div id="sectorBody"></div>
   </div>
 </div>
 
@@ -203,6 +219,10 @@ let state = { fuel_now:41, laps_done:94, stint_lap:2, avg_lap_live:cfg.avg_lap_s
   position:4, gap_ahead_s:3.2, gap_behind_s:5.8,
   last_lap_s:95.42, best_lap_s:94.18, last_pit_lap:null,
   penalties:0, tire_wear_pct:18, laps_on_tires:13,
+  // real-telemetry fields (sim feeder / bridge fed)
+  flag:'green', in_pits:false, session_remaining_s:null,
+  track_temp:null, air_temp:null, sectors:null, lap_delta_s:null,
+  cls_position:null, rivals:[],
   // damage (LMU categories %) + repair estimate (s) + per-wheel; wheels = FL,FR,RL,RR
   aero_pct:8, body_pct:11, susp_pct:0, tyres_pct:32, repair_s:6,
   wheels:[ {wear:0.26,brakeTemp:412,temp:86,press:172,flat:false,detached:false},
@@ -217,6 +237,50 @@ let currentPlan = Engine.generatePlan(cfg, wx);
 const $=id=>document.getElementById(id);
 const hms=s=>{s=Math.max(0,s|0);return `${(s/3600|0)}:${String(s/60%60|0).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`};
 const fmtLap=s=>{ if(s==null)return '—'; return s>=60?`${(s/60|0)}:${(s%60).toFixed(3).padStart(6,'0')}`:s.toFixed(3)+'s'; };
+
+// measured fuel burn from completed-lap fuel deltas (ignores refuels = fuel went up)
+function measuredFuelPerLap(){
+  if(!Array.isArray(lapLog) || lapLog.length<2) return null;
+  const drops=[];
+  for(let i=1;i<lapLog.length;i++){
+    const a=lapLog[i-1].fuel, b=lapLog[i].fuel;
+    if(a!=null && b!=null){ const d=a-b; if(d>0 && d<30) drops.push(d); }
+  }
+  if(!drops.length) return null;
+  const last=drops.slice(-5);
+  return last.reduce((x,y)=>x+y,0)/last.length;
+}
+
+// standings / sectors modal
+function openStandings(){ const m=$('standModal'); m.classList.add('open'); renderStandings(); }
+function closeStandings(){ $('standModal').classList.remove('open'); }
+function renderStandings(){
+  const sb=$('standBody'); const rivals=Array.isArray(state.rivals)?state.rivals:[];
+  if(!rivals.length){ sb.innerHTML='<p class="note">No standings feed yet — appears when telemetry sends rival data.</p>'; }
+  else {
+    const rows=rivals.slice().sort((a,b)=>(a.pos||99)-(b.pos||99)).map(r=>{
+      const us=r.is_us?' class="us"':'';
+      const gap=r.is_us?'—':(r.gap_s!=null?('+'+(+r.gap_s).toFixed(1)):'—');
+      const pit=r.in_pits?'<span class="tag-pit">PIT</span>':'';
+      return `<tr${us}><td>P${r.pos}</td><td>${r.name||'—'} ${pit}</td>`+
+        `<td>${r.cls||''}</td><td>${gap}</td>`+
+        `<td>${r.last_lap_s!=null?fmtLap(+r.last_lap_s):'—'}</td><td>${r.laps!=null?r.laps:'—'}</td></tr>`;
+    }).join('');
+    sb.innerHTML=`<table class="laptbl stand"><thead><tr><th>Pos</th><th>Car</th><th>Cls</th>`+
+      `<th>Gap</th><th>Last</th><th>Laps</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+  // our sectors
+  const se=$('sectorBody'); const s=state.sectors;
+  if(s && (s.s1!=null||s.s2!=null||s.s3!=null)){
+    const cell=v=>v!=null?(+v).toFixed(3):'—';
+    se.innerHTML='<div class="sec-row">'+
+      `<div class="sec"><span class="sk">S1</span><span class="sv">${cell(s.s1)}</span></div>`+
+      `<div class="sec"><span class="sk">S2</span><span class="sv">${cell(s.s2)}</span></div>`+
+      `<div class="sec"><span class="sk">S3</span><span class="sv">${cell(s.s3)}</span></div>`+
+      `<div class="sec"><span class="sk">Lap</span><span class="sv">${state.last_lap_s!=null?fmtLap(state.last_lap_s):'—'}</span></div></div>`;
+  } else { se.innerHTML='<p class="note">No sector split feed yet.</p>'; }
+}
+
 function render(){
   const plan = currentPlan;
   // which stint are we in, how many stops remain
@@ -226,7 +290,14 @@ function render(){
   const futureStops = plan.stints.filter(s=> s.in_lap > state.laps_done).length;
   const m = Engine.liveMetrics(cfg, {...state, remaining_stops:futureStops}, plan, wx);
 
-  $('clock').textContent = hms(cfg.duration_s - state.elapsed_s);
+  $('clock').textContent = hms(state.session_remaining_s != null ? state.session_remaining_s : (cfg.duration_s - state.elapsed_s));
+  // track flag chip
+  const fc = $('flagChip'); if(fc){
+    const fl = (state.flag||'green').toLowerCase();
+    const map = {green:['GREEN','f-green'],yellow:['YELLOW','f-yellow'],fcy:['FULL-COURSE YELLOW','f-fcy'],checkered:['CHECKERED','f-chk']};
+    const [txt,cls] = map[fl] || map.green;
+    fc.textContent = '● '+txt; fc.className = 'chip flag '+cls;
+  }
   const wet = m.weather_now==='wet';
   $('wx').textContent = m.weather_now.toUpperCase(); $('wx').classList.toggle('wet',wet);
   $('fuelLaps').textContent = m.fuel_laps_left;
@@ -234,7 +305,9 @@ function render(){
   $('pitTile').className = 'panel stat'+(m.pit_in_laps<=1?' crit':m.pit_in_laps<=3?' hot':'');
   const stintLap = Math.max(0, state.laps_done - (active?active.in_lap:0));
   $('stint').textContent = stintLap; $('stintSub').textContent = 'target '+(active?.target_laps??'—');
-  $('fuelSub').textContent = state.fuel_now.toFixed(1)+' L';
+  const realFpl = measuredFuelPerLap();
+  $('fuelSub').textContent = state.fuel_now.toFixed(1)+' L'
+    + (realFpl!=null ? ' · '+realFpl.toFixed(2)+' L/lap' : '');
 
   $('lapsLeft').textContent = m.laps_left;
   $('stops').textContent = futureStops;
@@ -256,6 +329,14 @@ function render(){
   $('gapA').textContent = state.gap_ahead_s==null ? '—' : '+'+state.gap_ahead_s.toFixed(1)+'s';
   $('gapB').textContent = state.gap_behind_s==null ? '—' : '-'+state.gap_behind_s.toFixed(1)+'s';
   $('lastLap').textContent = fmtLap(state.last_lap_s);
+  // last-vs-best delta
+  const ld = $('lapDelta');
+  if(ld){
+    let d = state.lap_delta_s;
+    if(d==null && state.last_lap_s!=null && state.best_lap_s!=null) d = state.last_lap_s - state.best_lap_s;
+    if(d==null){ ld.textContent=''; }
+    else { ld.textContent = (d<=0?'':'+')+d.toFixed(3); ld.className = 'delta '+(d<=0.001?'ok':d<1?'warn':'bad'); }
+  }
   $('bestLap').textContent = fmtLap(state.best_lap_s);
   $('lastPit').textContent = state.last_pit_lap==null ? '—' : state.last_pit_lap;
   const dsum = Engine.damageSummary(cfg, state);
@@ -347,6 +428,14 @@ function renderWxStrip(){
   }
   $('wxLabel').textContent = label;
   $('wxLabel').className = 'wx-label' + (nowWet?' wet':'');
+  // track/air temp (real telemetry)
+  const wt = $('wxTemp');
+  if(wt){
+    const parts = [];
+    if(state.track_temp!=null) parts.push('Track '+Math.round(state.track_temp)+'°');
+    if(state.air_temp!=null) parts.push('Air '+Math.round(state.air_temp)+'°');
+    wt.textContent = parts.join('  ·  ');
+  }
 }
 
 // hover the weather bar → tooltip with the condition at that time
@@ -736,8 +825,9 @@ function closeTimeline(){ $('tlModal').classList.remove('open'); }
 // ---- live sync: receive telemetry/sim state and re-render ----
 const LIVE_FIELDS = ['fuel_now','laps_done','stint_lap','avg_lap_live','elapsed_s',
   'current_driver','last_lap_s','best_lap_s','position','gap_ahead_s','gap_behind_s',
-  'weather_now','penalties','aero_pct','body_pct','susp_pct','tyres_pct','repair_s','tire_wear_pct','laps_on_tires'];
-let _syncInit = true, _lastFeed = null;
+  'weather_now','penalties','aero_pct','body_pct','susp_pct','tyres_pct','repair_s','tire_wear_pct','laps_on_tires',
+  'flag','in_pits','session_remaining_s','track_temp','air_temp','lap_delta_s','cls_position'];
+let _syncInit = true, _lastFeed = null, _pitActive = false;
 function updateConn(){
   const el = $('conn'); if(!el) return;
   const mode = PitDB.mode === 'supabase' ? 'cloud' : 'local';
@@ -750,7 +840,15 @@ setInterval(updateConn, 1000);
 PitDB.onState(s => {
   LIVE_FIELDS.forEach(k => { if(s[k] !== undefined) state[k] = s[k]; });
   if(Array.isArray(s.wheels)) state.wheels = s.wheels;
+  if(Array.isArray(s.rivals)) state.rivals = s.rivals;
+  if(s.sectors && typeof s.sectors === 'object') state.sectors = s.sectors;
+  // pit auto-detect: in_pits false->true = entry, true->false = exit
+  if(s.in_pits !== undefined){
+    if(s.in_pits && !_pitActive){ _pitActive = true; logEvent('Pit entry (lap '+state.laps_done+')'); }
+    else if(!s.in_pits && _pitActive){ _pitActive = false; logEvent('Pit exit — rolling'); }
+  }
   _lastFeed = Date.now(); updateConn();
+  if(document.getElementById('standModal').classList.contains('open')) renderStandings();
   if(_syncInit){
     // first snapshot = just seed the baseline, don't synthesize a lap history
     _lastLoggedLap = state.laps_done; _syncInit = false;
