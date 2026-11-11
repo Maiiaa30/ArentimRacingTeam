@@ -17,15 +17,20 @@ window.RACE_CONFIG = {
                     "Diogo Rodrigues", "Rui Garcia", "Helder Marques", "Francisco Coelho"],
   cannot_start: ["Rui Garcia", "Helder Marques"],
 
-  // --- car / pace (ASSUMED GT3 endurance values — replace with practice data in Setup) ---
-  // Tuned so the default plan is ~6 stints of ~32 laps = the agreed strategy.
-  avg_lap_s: 110,              // avg lap time, seconds   (ASSUMPTION — set real in Setup)
-  fuel_per_lap: 3.1,           // liters per lap dry      (ASSUMPTION)
-  tank_cap: 105,               // liters ~ 33-lap stint   (ASSUMPTION)
+  // --- car / pace :: MONZA · BMW M4 LMGT3 (real-data baseline) ---
+  // Sources: real/sim WEC Monza LMGT3 pace ~1:49-1:53 and ~190-204 laps over 6h;
+  // in-game pit window clusters near lap ~24. LMU LMGT3 stint is governed by
+  // VIRTUAL ENERGY (not the tank) — the tank holds far more than a stint needs, so
+  // the real limiter is laps-per-100%-VE ≈ 24 at Monza, captured by max_stint_laps.
+  // Refine each from the car's MFD (Fuel L/lap + VE %/lap) after a few laps — the
+  // live bridge also overwrites these with real telemetry once running.
+  avg_lap_s: 112,              // Monza GT3 race avg (1:52) — conservative for mixed drivers + traffic
+  fuel_per_lap: 2.8,           // Monza GT3 ~2.8 L/lap (MFD confirms; tank is NOT the limiter here)
+  tank_cap: 120,              // LMGT3 class tank — physical max; VE caps the stint well before this
   fuel_margin_laps: 1,         // keep this many laps of fuel as safety
-  // Short-fuel cap for the EQUAL-SEAT plan: pit at ~24 laps (~45 min) instead of
-  // running the tank dry (~32). Makes 8 even stints so all 4 drivers get the same
-  // time. Set to 0/remove to go back to fuel-max (fewer stops, uneven split).
+  // VE pit-window cap: LMGT3 at Monza runs out of Virtual Energy at ~24 laps, so
+  // pit there (exceeding 100% VE = 100s stop-go penalty). This also makes 8 even
+  // stints → all 4 drivers get the same seat time. Set to 0 to plan on fuel only.
   max_stint_laps: 24,
 
   // --- tires ---
@@ -34,12 +39,13 @@ window.RACE_CONFIG = {
   tire_count_mode: "set",      // "set" (4 tires = 1 set) | "individual"  — confirm in LMU
   wets_share_budget: true,     // wets come out of the same 20
   tire_life_laps: {            // usable laps before big dropoff, per compound
-    // med 70 => comfortably double-stints (~2 x 33 laps) in the cool forecast
+    // Monza = low tyre deg (smooth, few corners). BMW M4 wear "balanced/improved"
+    // post-1.4, outer-rear worst. med comfortably double-stints (2 x 24 = 48 laps).
     soft: 40, med: 70, hard: 85, wet: 55
   },
 
   // --- pit ---
-  pit_loss_s: 55,              // pit lane delta + service (PLACEHOLDER — measure)
+  pit_loss_s: 60,              // Monza: pit-lane delta + ~42s VE refuel/service (refine on day)
 
   // --- weather ---
   wet_lap_factor: 1.12,        // wet lap time = dry * this (PLACEHOLDER)
@@ -49,10 +55,13 @@ window.RACE_CONFIG = {
   optimize_target: "fewest_stops", // "fewest_stops" | "fastest" | "safest" (operator picks)
 
   // --- car / class ---
-  car_class: "GT3",            // "GT3" | "Hypercar"
-  energy_mode: "fuel",         // "fuel" (GT3) | "ve" (Hypercar virtual energy)
-  ve_max: 100,                 // Virtual Energy budget (%) — only if energy_mode "ve"
-  ve_per_lap: 1.6,             // VE % used per lap — validate in-game
+  car_class: "GT3",            // BMW M4 LMGT3
+  // NOTE: LMU LMGT3 IS virtual-energy governed (like Hypercar). Planning uses
+  // max_stint_laps (the VE pit window); live VE% shows from telemetry. These two
+  // are reference values for Monza.
+  energy_mode: "ve",           // LMGT3 runs to a Virtual Energy allowance
+  ve_max: 100,                 // Virtual Energy budget (%)
+  ve_per_lap: 4.2,             // ~100% / 24 laps at Monza — validate on MFD
 
   // --- damage / repair ---  LMU reports Aero/Body/Susp/Tyres % + a repair-time estimate
   damage: {
