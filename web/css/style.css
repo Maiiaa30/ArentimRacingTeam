@@ -423,11 +423,12 @@ label.fld{display:flex;justify-content:space-between;align-items:center;gap:10px
 /* car cell: manufacturer badge + car name + team */
 .cls-row .car{min-width:230px}
 .mbadge{display:inline-flex;align-items:center;justify-content:center;
-  width:40px;height:40px;border-radius:9px;background:var(--mc);color:#fff;
-  font-family:var(--mono);font-weight:800;font-size:12px;letter-spacing:.5px;
-  margin-right:12px;vertical-align:middle;overflow:hidden;
-  box-shadow:0 2px 8px rgba(0,0,0,.45),inset 0 0 0 1px rgba(255,255,255,.12)}
-.mlogo{width:26px;height:26px;object-fit:contain;filter:brightness(0) invert(1)}
+  width:42px;height:42px;border-radius:8px;margin-right:12px;vertical-align:middle;
+  flex:0 0 auto;background:transparent}
+.mlogo{max-width:38px;max-height:38px;object-fit:contain;display:block}
+/* monogram fallback (no logo file): subtle neutral chip, brand-colour letters */
+.mbadge.nologo{background:#0d131b;border:1px solid var(--line2);color:var(--mc);
+  font-family:var(--mono);font-weight:800;font-size:13px;letter-spacing:.5px}
 .mbadge .mono{display:none}
 .mbadge.nologo .mono{display:inline}
 .car-txt{display:inline-flex;flex-direction:column;vertical-align:middle;gap:1px}

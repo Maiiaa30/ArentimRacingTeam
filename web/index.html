@@ -274,8 +274,8 @@ const MANUF = {
   'TOYOTA':{c:'#EB0A1E',s:'TOY',g:'toyota'}, 'FERRARI':{c:'#D40000',s:'FER',g:'ferrari'},
   'CADILLAC':{c:'#B9945A',s:'CAD',g:'cadillac'}, 'PORSCHE':{c:'#C9A227',s:'POR',g:'porsche'},
   'BMW':{c:'#0066B1',s:'BMW',g:'bmw'}, 'LAMBORGHINI':{c:'#D8B500',s:'LAM',g:'lamborghini'}, 'LAMBO':{c:'#D8B500',s:'LAM',g:'lamborghini'},
-  'MERCEDES':{c:'#00A19C',s:'MER',g:''}, 'ASTON':{c:'#00594F',s:'AST',g:'astonmartin'}, 'ASTON MARTIN':{c:'#00594F',s:'AST',g:'astonmartin'},
-  'PEUGEOT':{c:'#1B3C78',s:'PEU',g:'peugeot'}, 'ALPINE':{c:'#0055A4',s:'ALP',g:''}, 'AUDI':{c:'#BB0A30',s:'AUD',g:'audi'},
+  'MERCEDES':{c:'#00A19C',s:'MER',g:'mercedes'}, 'ASTON':{c:'#00594F',s:'AST',g:'astonmartin'}, 'ASTON MARTIN':{c:'#00594F',s:'AST',g:'astonmartin'},
+  'PEUGEOT':{c:'#1B3C78',s:'PEU',g:'peugeot'}, 'ALPINE':{c:'#0055A4',s:'ALP',g:'alpine'}, 'AUDI':{c:'#BB0A30',s:'AUD',g:'audi'},
   'MCLAREN':{c:'#FF8000',s:'MCL',g:'mclaren'}, 'CORVETTE':{c:'#C5A24A',s:'COR',g:'chevrolet'}, 'CHEVROLET':{c:'#C5A24A',s:'CHV',g:'chevrolet'},
   'NISSAN':{c:'#C3002F',s:'NIS',g:'nissan'}, 'HONDA':{c:'#E40521',s:'HON',g:'honda'}, 'FORD':{c:'#00274E',s:'FOR',g:'ford'},
   'ARENTIM':{c:'#e10600',s:'ART',g:''},
@@ -287,9 +287,9 @@ function manufMeta(name){
   return {c:'#7d8795', s:(name||'?').slice(0,3).toUpperCase(), g:''};
 }
 function badgeHtml(mf){
-  // real logo if we have one (white silhouette); else colour monogram. img onerror -> monogram.
+  // full-colour PNG logo on a transparent chip; monogram fallback if no logo file.
   if(mf.g) return `<span class="mbadge" style="--mc:${mf.c}">`+
-    `<img class="mlogo" src="img/manuf/${mf.g}.svg" alt="" `+
+    `<img class="mlogo" src="img/manuf/${mf.g}.png" alt="" `+
     `onerror="this.parentNode.classList.add('nologo');this.remove();"><span class="mono">${mf.s}</span></span>`;
   return `<span class="mbadge nologo" style="--mc:${mf.c}"><span class="mono">${mf.s}</span></span>`;
 }
