@@ -53,6 +53,7 @@
   </div>
 </div>
 <script src="js/config.js"></script>
+<script src="js/supabase.js"></script>
 <script>
 function state(){
   return {
@@ -64,7 +65,7 @@ function state(){
     updated_at:new Date().toISOString()
   };
 }
-function upd(){ out.textContent = JSON.stringify(state(), null, 2); /* PitDB.pushState(state()) later */ }
+function upd(){ const s=state(); out.textContent = JSON.stringify(s, null, 2); PitDB.pushState(s); }
 function lapTick(){ laps.value=+laps.value+1; slap.value=+slap.value+1; los.value=+los.value+1;
   el.value=+el.value+ +lap.value; fuel.value=Math.max(0,+fuel.value-RACE_CONFIG.fuel_per_lap); upd(); }
 function pit(){ slap.value=0; los.value=0; tw.value=0; fuel.value=RACE_CONFIG.tank_cap;

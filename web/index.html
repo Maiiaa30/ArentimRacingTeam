@@ -435,6 +435,17 @@ function ev(type){
   }
   render();
 }
+
+// ---- live sync: receive telemetry/sim state and re-render ----
+const LIVE_FIELDS = ['fuel_now','laps_done','stint_lap','avg_lap_live','elapsed_s',
+  'current_driver','last_lap_s','best_lap_s','position','gap_ahead_s','gap_behind_s',
+  'penalties','aero_pct','body_pct','susp_pct','tyres_pct','repair_s','tire_wear_pct','laps_on_tires'];
+PitDB.onState(s => {
+  LIVE_FIELDS.forEach(k => { if(s[k] !== undefined) state[k] = s[k]; });
+  if(Array.isArray(s.wheels)) state.wheels = s.wheels;
+  render();
+});
+
 render();
 </script>
 </body>
