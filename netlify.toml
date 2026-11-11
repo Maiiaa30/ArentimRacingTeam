@@ -1,0 +1,14 @@
+# Netlify deploy — static site in web/
+[build]
+  publish = "web"
+
+# Security headers for the whole site
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+
+# To lock the whole site behind a password (real access control, unlike the soft
+# in-app gate), set a site password in Netlify, or use Netlify Identity / Basic Auth.
