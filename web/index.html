@@ -55,7 +55,7 @@
         <div class="kv"><span class="k">On track</span><span class="v" id="driver">—</span></div>
         <div class="kv"><span class="k">Stint time</span><span class="v" id="stintTime">—</span></div>
         <div class="kv"><span class="k">Laps left</span><span class="v" id="lapsLeft">—</span></div>
-        <div class="kv"><span class="k">Stops planned</span><span class="v" id="stops">—</span></div>
+        <div class="kv"><span class="k">Stops left</span><span class="v" id="stops">—</span></div>
         <div class="kv"><span class="k">Avg lap</span><span class="v" id="avg">—</span></div>
         <div class="kv"><span class="k">Make finish</span><span id="finish"></span></div>
       </div>
@@ -75,6 +75,7 @@
           <button onclick="ev('pace_change')">Pace Change</button>
         </div>
         <p class="note">Locks past stints, regenerates the rest of the race.</p>
+        <div id="evLog" class="ev-log"></div>
       </div>
     </div>
   </div>
@@ -97,8 +98,8 @@
 const cfg = window.RACE_CONFIG, wx = window.WEATHER_TIMELINE;
 document.getElementById('target').textContent = cfg.optimize_target.replace('_',' ');
 
-let state = { fuel_now:cfg.tank_cap, laps_done:0, stint_lap:0, avg_lap_live:cfg.avg_lap_s,
-  elapsed_s:0, remaining_stops:null, driver_idx:0, tires_used:0,
+let state = { fuel_now:41, laps_done:94, stint_lap:2, avg_lap_live:cfg.avg_lap_s,
+  elapsed_s:94*cfg.avg_lap_s, remaining_stops:null, driver_idx:1, tires_used:8,
   // extra race data (telemetry/app-fed later; placeholders for now)
   // DEMO placeholders — real values come from sim feeder / telemetry
   current_driver:(window.DRIVERS||['D1'])[0], stint_time_s:1240,
@@ -111,15 +112,23 @@ let state = { fuel_now:cfg.tank_cap, laps_done:0, stint_lap:0, avg_lap_live:cfg.
            {wear:0.32,brakeTemp:436,temp:91,press:173,flat:false,detached:false},
            {wear:0.23,brakeTemp:355,temp:82,press:168,flat:false,detached:false},
            {wear:0.28,brakeTemp:371,temp:88,press:169,flat:false,detached:false} ],
-  last_impact_mag:14.2, last_impact_ago_s:35, accum_impact:40 };
+  last_impact_mag:14.2, last_impact_ago_s:35, accum_impact:40, last_pit_lap:69 };
+
+// live plan — events regenerate it; render reads it
+let currentPlan = Engine.generatePlan(cfg, wx);
 
 const $=id=>document.getElementById(id);
 const hms=s=>{s=Math.max(0,s|0);return `${(s/3600|0)}:${String(s/60%60|0).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`};
 const fmtLap=s=>{ if(s==null)return '—'; return s>=60?`${(s/60|0)}:${(s%60).toFixed(3).padStart(6,'0')}`:s.toFixed(3)+'s'; };
 
 function render(){
-  const plan = Engine.generatePlan(cfg, wx);
-  const m = Engine.liveMetrics(cfg, {...state, remaining_stops:plan.stops}, plan, wx);
+  const plan = currentPlan;
+  // which stint are we in, how many stops remain
+  let activeIdx = 0;
+  plan.stints.forEach((s,i)=>{ if(s.in_lap <= state.laps_done) activeIdx = i; });
+  const active = plan.stints[activeIdx];
+  const futureStops = plan.stints.filter(s=> s.in_lap > state.laps_done).length;
+  const m = Engine.liveMetrics(cfg, {...state, remaining_stops:futureStops}, plan, wx);
 
   $('clock').textContent = hms(cfg.duration_s - state.elapsed_s);
   const wet = m.weather_now==='wet';
@@ -127,12 +136,12 @@ function render(){
   $('fuelLaps').textContent = m.fuel_laps_left;
   $('pitIn').textContent = m.pit_in_laps;
   $('pitTile').className = 'panel stat'+(m.pit_in_laps<=1?' crit':m.pit_in_laps<=3?' hot':'');
-  const t0 = plan.stints[0];
-  $('stint').textContent = state.stint_lap; $('stintSub').textContent = 'target '+(t0?.target_laps??'—');
+  const stintLap = Math.max(0, state.laps_done - (active?active.in_lap:0));
+  $('stint').textContent = stintLap; $('stintSub').textContent = 'target '+(active?.target_laps??'—');
   $('fuelSub').textContent = state.fuel_now.toFixed(1)+' L';
 
   $('lapsLeft').textContent = m.laps_left;
-  $('stops').textContent = plan.stops;
+  $('stops').textContent = futureStops;
   $('avg').textContent = state.avg_lap_live.toFixed(2)+'s';
   $('finish').innerHTML = `<span class="pill ${m.make_finish?'ok':'bad'}">${m.make_finish?'YES':'NO'}</span>`
     + (m.fuel_deficit>0?` <span class="note" style="margin:0">short ${m.fuel_deficit}L</span>`:'');
@@ -165,7 +174,8 @@ function render(){
 
   const tb=$('plan'); tb.innerHTML='';
   plan.stints.forEach((s,i)=>{
-    const tr=document.createElement('tr'); if(i===0)tr.className='active';
+    const tr=document.createElement('tr');
+    tr.className = i<activeIdx ? 'done' : i===activeIdx ? 'active' : '';
     tr.innerHTML=`<td>${s.idx+1}</td><td>${s.driver}</td><td>${s.in_lap}</td>`+
       `<td><span class="tire ${s.tire_compound}">${s.tire_compound.toUpperCase()}</span></td>`+
       `<td class="act ${s.tire_action}">${s.tire_action}</td>`+
@@ -179,7 +189,7 @@ function render(){
 
 // ---- damage detail modal ----
 function renderDamage(){
-  const plan = Engine.generatePlan(cfg, wx);
+  const plan = currentPlan;
   const dsum = Engine.damageSummary(cfg, state);
   const penalty = Math.max(0, (state.last_lap_s||0) - (state.best_lap_s||0)); // measured proxy
   const lapsRem = plan.total_laps - state.laps_done;
@@ -220,11 +230,46 @@ function renderDamage(){
 function openDamage(){ renderDamage(); $('dmgModal').classList.add('open'); }
 function closeDamage(){ $('dmgModal').classList.remove('open'); }
 
+// ---- event engine: lock past stints, regenerate the remainder ----
+function curState(){
+  return { laps_done:state.laps_done, elapsed_s:state.elapsed_s, fuel_now:state.fuel_now,
+           tires_used:state.tires_used||0, driver_idx:state.driver_idx };
+}
+function lockedStints(){
+  // lock stints that started BEFORE this lap; the stint at/after now is rebuilt from current state
+  const locked = currentPlan.stints.filter(s=> s.in_lap < state.laps_done).map(s=>({...s}));
+  locked.forEach(s=> s.status = 'done');
+  return locked;
+}
+function regen(){ currentPlan = Engine.regenerate(cfg, wx, curState(), lockedStints()); }
+
+function logEvent(reason){
+  const futureStops = currentPlan.stints.filter(s=> s.in_lap > state.laps_done).length;
+  const m = Engine.liveMetrics(cfg, {...state, remaining_stops:futureStops}, currentPlan, wx);
+  const li=document.createElement('div'); li.className='ev-item';
+  li.innerHTML = `<span class="ev-t">L${state.laps_done}</span> ${reason} → ${futureStops} stops left · `+
+    `finish ${m.make_finish?'<span class="ok">OK</span>':'<span class="bad">NO</span>'}`;
+  const log=$('evLog'); log.insertBefore(li, log.firstChild);
+}
+
 function ev(type){
-  if(type==='rain_now'){ wx.push({start_s:state.elapsed_s,condition:'wet',wetness:0.6}); }
-  // forced_pit / pace_change → event engine wiring in phase 5
+  if(type==='rain_now'){
+    wx.push({start_s:state.elapsed_s, condition:'wet', wetness:0.6});
+    regen(); logEvent('Rain → wets');
+  } else if(type==='forced_pit'){
+    // unscheduled stop NOW: refuel + fresh tyres + repair, add pit loss
+    state.fuel_now = cfg.tank_cap; state.elapsed_s += cfg.pit_loss_s;
+    state.last_pit_lap = state.laps_done; state.stint_lap = 0;
+    state.tires_used = (state.tires_used||0) + (cfg.tire_count_mode==='set'?4:1);
+    state.aero_pct=0; state.body_pct=0; state.susp_pct=0; state.tyres_pct=0; state.repair_s=0;
+    regen(); logEvent('Forced pit (+'+cfg.pit_loss_s+'s, repaired)');
+  } else if(type==='pace_change'){
+    const v = parseFloat(prompt('New average lap time (seconds):', cfg.avg_lap_s));
+    if(!isFinite(v) || v<=0) return;
+    cfg.avg_lap_s = v; state.avg_lap_live = v;
+    regen(); logEvent('Pace → '+v.toFixed(2)+'s/lap');
+  }
   render();
-  if(type!=='rain_now') alert('Event "'+type+'": regenerate logic lands in phase 5.');
 }
 render();
 </script>
