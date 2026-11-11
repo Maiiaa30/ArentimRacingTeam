@@ -81,6 +81,12 @@ window.RACE_CONFIG = {
 // Real driver names — editable from the dashboard Setup panel.
 window.DRIVERS = ["Francisco Coelho", "Diogo Rodrigues", "Rui Garcia", "Helder Marques"];
 
+// Clean up driver names the GAME reports differently from how we want them shown
+// (e.g. an LMU profile typo). Keys = exact game string, values = display name.
+window.DRIVER_ALIASES = {
+  "Diiogo Rodrigues": "Diogo Rodrigues"
+};
+
 // Pristine SHIPPED baseline — snapshot BEFORE any localStorage override is applied.
 // The "Default strat" view renders from this so a stale Setup override on one
 // browser can never hide the real agreed pre-race plan.

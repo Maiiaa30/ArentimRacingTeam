@@ -1174,10 +1174,13 @@ function updateConn(){
   else { el.className='chip conn stale'; el.textContent='● stale '+(age<60?Math.round(age)+'s':Math.round(age/60)+'m')+' · '+mode; }
 }
 setInterval(updateConn, 1000);
+const _ALIASES = window.DRIVER_ALIASES || {};
+const dname = n => (n && _ALIASES[n]) || n;   // clean game-reported driver names
 PitDB.onState(s => {
   LIVE_FIELDS.forEach(k => { if(s[k] !== undefined) state[k] = s[k]; });
+  if(state.current_driver) state.current_driver = dname(state.current_driver);
   if(Array.isArray(s.wheels)) state.wheels = s.wheels;
-  if(Array.isArray(s.rivals)) state.rivals = s.rivals;
+  if(Array.isArray(s.rivals)){ s.rivals.forEach(r=>{ if(r && r.driver) r.driver = dname(r.driver); }); state.rivals = s.rivals; }
   if(s.sectors && typeof s.sectors === 'object') state.sectors = s.sectors;
   // pit auto-detect: in_pits false->true = entry, true->false = exit
   if(s.in_pits !== undefined){
