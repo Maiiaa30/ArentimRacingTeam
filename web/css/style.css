@@ -167,6 +167,25 @@ tr.active{background:rgba(225,6,0,.08)} tr.active td:first-child{border-left:2px
   background:#0a1016;color:var(--txt);font-size:14px;font-family:var(--mono)}
 .setup-grid input:focus,.setup-grid select:focus{outline:none;border-color:var(--accent)}
 .btns button.go{background:var(--accent);color:#fff;font-weight:700}
+/* race timeline */
+.tl-wxband{display:flex;height:9px;border-radius:5px;overflow:hidden;margin:10px 0 4px;border:1px solid var(--line)}
+.tl-wx.dry{background:#1d2a16}.tl-wx.wet{background:#153a52}
+.tl-track{position:relative;display:flex;height:58px;border-radius:8px;overflow:hidden;border:1px solid var(--line2);background:#0a1016}
+.tl-seg{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:2px;
+  min-width:0;overflow:hidden;border-right:1px solid rgba(0,0,0,.4);color:#fff;font-family:var(--mono);
+  font-size:10.5px;white-space:nowrap;padding:0 2px}
+.tl-seg b{font-size:12px}
+.tl-seg span{opacity:.85;font-size:9.5px}
+.tl-seg.done{opacity:.45}
+.tl-seg.d0{background:#c2342e}.tl-seg.d1{background:#2f6fb0}.tl-seg.d2{background:#3f9e5a}.tl-seg.d3{background:#b7872f}
+.tl-now{position:absolute;top:-3px;bottom:-3px;width:2px;background:#fff;box-shadow:0 0 6px #fff}
+.tl-now::after{content:'';position:absolute;top:-4px;left:-3px;border:4px solid transparent;border-top-color:#fff}
+.tl-axis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--mut);margin-top:5px}
+.tl-legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:14px;font-family:var(--mono);font-size:12px;color:var(--mut)}
+.tl-key{display:inline-flex;align-items:center;gap:6px}
+.tl-key i{width:12px;height:12px;border-radius:3px;display:inline-block}
+.tl-key i.d0{background:#c2342e}.tl-key i.d1{background:#2f6fb0}.tl-key i.d2{background:#3f9e5a}.tl-key i.d3{background:#b7872f}
+.tl-key i.now{background:#fff;width:3px;height:14px;border-radius:1px}
 .modal .x{position:absolute;top:12px;right:14px;cursor:pointer;color:var(--mut);
   font-size:18px;background:none;border:0;padding:4px 8px}
 .modal .x:hover{color:var(--txt)}
