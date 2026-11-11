@@ -73,11 +73,23 @@
           <button class="alert" onclick="ev('rain_now')">Rain NOW</button>
           <button class="alert" onclick="ev('forced_pit')">Forced Pit</button>
           <button onclick="ev('pace_change')">Pace Change</button>
+          <button onclick="openWif()">What-if</button>
         </div>
         <p class="note">Locks past stints, regenerates the rest of the race.</p>
         <div id="evLog" class="ev-log"></div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- what-if sandbox modal -->
+<div class="modal-bg" id="wifModal" onclick="if(event.target===this)closeWif()">
+  <div class="modal">
+    <button class="x" onclick="closeWif()">✕</button>
+    <h2>What-if sandbox</h2>
+    <p class="note" style="margin-top:0">Test a scenario against the current plan — nothing is committed.</p>
+    <div class="btns" id="wifBtns"></div>
+    <div id="wifResult"></div>
   </div>
 </div>
 
@@ -251,6 +263,51 @@ function logEvent(reason){
     `finish ${m.make_finish?'<span class="ok">OK</span>':'<span class="bad">NO</span>'}`;
   const log=$('evLog'); log.insertBefore(li, log.firstChild);
 }
+
+// ---- what-if sandbox (non-destructive) ----
+const WIF = {
+  pit:  {label:'Pit now',        ov:()=>({state:{fuel_now:cfg.tank_cap, tires_used:(state.tires_used||0)+(cfg.tire_count_mode==='set'?4:1)}})},
+  wets: {label:'Wets now',       ov:()=>({weather:[...wx,{start_s:state.elapsed_s,condition:'wet',wetness:0.6}]})},
+  save: {label:'Fuel save 5%',   ov:()=>({config:{fuel_per_lap:+(cfg.fuel_per_lap*0.95).toFixed(3)}})},
+  push: {label:'Push (soft)',    ov:()=>({config:{optimize_target:'fastest'}})},
+  safe: {label:'Conserve (hard)',ov:()=>({config:{optimize_target:'safest'}})}
+};
+function planStats(plan, hcfg, hstate, hwx){
+  const fs = plan.stints.filter(s=> s.in_lap > state.laps_done).length;
+  const m = Engine.liveMetrics(hcfg, {...hstate, remaining_stops:fs}, plan, hwx);
+  return { stops:fs, finish:plan.finish_time_s, make:m.make_finish, tires:plan.tires_used,
+           over:plan.tires_over_budget };
+}
+function baseStats(){
+  // same basis as what-if: regenerate the remainder from the current state, no overrides
+  const plan = Engine.regenerate(cfg, wx, curState(), lockedStints());
+  return planStats(plan, cfg, state, wx);
+}
+function runWif(key){
+  const ov = WIF[key].ov();
+  const hcfg = Object.assign({}, cfg, ov.config||{});
+  const hwx  = ov.weather || wx;
+  const hstate = Object.assign({}, state, ov.state||{});
+  const plan = Engine.whatIf(cfg, wx, curState(), lockedStints(), ov);
+  const w = planStats(plan, hcfg, hstate, hwx), b = baseStats();
+  // lower stops/tires = better; make-finish true = better
+  const col=(wv,bv,lowerBetter=true)=> wv===bv?'':((lowerBetter? wv<bv : wv>bv)?'ok':'bad');
+  const row=(k,bv,wv,cls)=>`<div class="cmp-row"><span>${k}</span><span class="cmp-b">${bv}</span>`+
+    `<span class="cmp-w ${cls}">${wv}</span></div>`;
+  $('wifResult').innerHTML =
+    `<div class="cmp-head"><span>Scenario: <b>${WIF[key].label}</b></span><span class="cmp-b">now</span><span class="cmp-w">what-if</span></div>`+
+    row('Stops left', b.stops, w.stops, col(w.stops,b.stops,true))+
+    row('Finish est', hms(b.finish), hms(w.finish), col(w.finish,b.finish,true))+
+    row('Make finish', b.make?'YES':'NO', w.make?'YES':'NO', w.make===b.make?'':(w.make?'ok':'bad'))+
+    row('Tyres used', b.tires+'/'+cfg.tire_budget, w.tires+'/'+cfg.tire_budget, col(w.tires,b.tires,true))+
+    `<p class="note">Green = better than current plan · red = worse. Not applied.</p>`;
+}
+function openWif(){
+  $('wifBtns').innerHTML = Object.keys(WIF).map(k=>`<button onclick="runWif('${k}')">${WIF[k].label}</button>`).join('');
+  $('wifResult').innerHTML = `<p class="note">Pick a scenario above.</p>`;
+  $('wifModal').classList.add('open');
+}
+function closeWif(){ $('wifModal').classList.remove('open'); }
 
 function ev(type){
   if(type==='rain_now'){
