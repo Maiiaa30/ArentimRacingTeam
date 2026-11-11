@@ -155,7 +155,49 @@ const Engine = (() => {
     return regenerate(c2, w2, s2, lockedStints);
   }
 
-  return { generatePlan, liveMetrics, regenerate, whatIf, conditionAt, lapsPerTank, estTotalLaps };
+  // ---- damage: summary + repair decision ----
+  // dmg = { dent:[8 ints 0..2], wheels:[{wear,flat,detached,brakeTemp} x4],
+  //         repair_time_body_s, repair_time_all_s }  (times from LMU engineer menu if exposed, else cfg)
+  function damageSummary(cfg, dmg) {
+    const dent = dmg.dent || [0,0,0,0,0,0,0,0];
+    const dentSum = dent.reduce((a,b)=>a+b, 0);               // 0..16
+    const body_pct = Math.round(dentSum / 16 * 100);
+    const wheels = dmg.wheels || [];
+    const flats = wheels.filter(w => w.flat).length;
+    const detached = wheels.filter(w => w.detached).length;
+    const worstWear = Math.max(0, ...wheels.map(w => w.wear || 0));
+    const mandatory = flats > 0 || detached > 0;              // puncture / wheel off = pit now
+    const severe = dent.some(z => z >= (cfg.damage?.critical_severity ?? 2));
+    return { body_pct, dentSum, flats, detached, worstWear, mandatory, severe };
+  }
+
+  // Auto-recommend repair. penalty_s = MEASURED lap-time loss (avg_after - baseline), per lap.
+  // opts = { pitting_anyway:bool, repair_time_s:num }
+  function repairDecision(cfg, dmg, penalty_s, lapsRemaining, opts) {
+    opts = opts || {};
+    const sum = damageSummary(cfg, dmg);
+    const repairT = opts.repair_time_s != null ? opts.repair_time_s
+                   : (sum.severe ? (cfg.damage?.repair_all_s ?? 120) : (cfg.damage?.repair_body_s ?? 30));
+    const stayOutCost = Math.max(0, (penalty_s || 0) * (lapsRemaining || 0));
+    // if already pitting, only the repair time is "extra"; if not, add a full pit loss
+    const repairCost = opts.pitting_anyway ? repairT : (cfg.pit_loss_s + repairT);
+    let rec;
+    if (sum.mandatory) rec = "REPAIR_NOW";          // flat / detached — forced
+    else if (sum.severe) rec = "REPAIR";            // risk of escalation / DNF
+    else rec = repairCost < stayOutCost ? "REPAIR" : "STAY_OUT";
+    return {
+      recommendation: rec,
+      mandatory: sum.mandatory,
+      penalty_per_lap_s: +(penalty_s || 0).toFixed(2),
+      stay_out_cost_s: +stayOutCost.toFixed(1),
+      repair_time_s: repairT,
+      repair_cost_s: +repairCost.toFixed(1),
+      saves_s: +(stayOutCost - repairCost).toFixed(1)
+    };
+  }
+
+  return { generatePlan, liveMetrics, regenerate, whatIf, conditionAt, lapsPerTank,
+           estTotalLaps, damageSummary, repairDecision };
 })();
 
 if (typeof module !== "undefined") module.exports = Engine;

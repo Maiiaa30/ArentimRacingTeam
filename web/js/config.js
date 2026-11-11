@@ -34,7 +34,16 @@ window.RACE_CONFIG = {
   car_class: "GT3",            // "GT3" | "Hypercar"
   energy_mode: "fuel",         // "fuel" (GT3) | "ve" (Hypercar virtual energy)
   ve_max: 100,                 // Virtual Energy budget (%) — only if energy_mode "ve"
-  ve_per_lap: 1.6              // VE % used per lap — validate in-game
+  ve_per_lap: 1.6,             // VE % used per lap — validate in-game
+
+  // --- damage / repair ---  (times = fallback estimates; read from LMU engineer menu if exposed)
+  damage: {
+    repair_body_s: 30,         // body-only repair time (PLACEHOLDER — validate in-game)
+    repair_all_s: 120,         // full repair incl. suspension/aero (cap ~180s)
+    critical_severity: 2,      // dent zone value that counts as severe
+    // dent zone index -> body location (community convention; VALIDATE by hitting corners)
+    zone_labels: ["front","front-right","right","rear-right","rear","rear-left","left","front-left"]
+  }
 };
 
 // Real driver names — swap these in (you said you'll tell me how later).

@@ -47,6 +47,25 @@ BOTH:          Supabase (Postgres + realtime) → dashboard (static SPA, your do
 - `regenerate` — lock done stints, rebuild remainder from current real state.
 - `whatIf` — clone + hypothetical, run regenerate, no commit.
 
+## Damage model (deep)
+UI: top-view car, 8 body zones colored from `mDentSeverity` (0/1/2 → green/amber/red),
+4 wheels at corners (wear %, flat/detached, brake-temp tint); details below.
+
+- **Zone map:** `mDentSeverity[8]` indices → body location is NOT in the header. Convention
+  in `config.damage.zone_labels` (front, f-right, right, r-right, rear, r-left, left, f-left).
+  VALIDATE by hitting known corners; cross-check with `mLastImpactPos`.
+- **Body % (derived):** `sum(dent)/16 × 100`. No raw aero %.
+- **Lap penalty = MEASURED, not guessed:** `Δt = avg_lap_after_incident − baseline_avg`.
+- **Repair times:** from LMU engineer menu if shared memory exposes them; else
+  `config.damage.repair_body_s / repair_all_s` (validate). HUD "red damage" = mandatory flag.
+- **Auto-recommend** (engine `repairDecision`):
+  - mandatory REPAIR_NOW if flat / detached wheel
+  - severe → REPAIR (escalation/DNF risk)
+  - else REPAIR if `repair_cost < Δt × laps_remaining`
+  - `repair_cost` = repair_time if pitting anyway, else `pit_loss + repair_time`
+- **Feeds:** Forced Pit event carries repair_time → race regenerates; Δt → make-finish recompute.
+- Engine: `damageSummary()` + `repairDecision()` (pure, tested with fake data).
+
 ## Build phases
 1. Schema + dashboard shell ✅ (scaffold)
 2. Strategy engine ✅ (pure JS)  ← refine math vs real practice data
