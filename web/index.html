@@ -307,6 +307,9 @@ function openStandings(){ const m=$('standModal'); m.classList.add('open'); rend
 function closeStandings(){ $('standModal').classList.remove('open'); }
 function renderStandings(){
   const sb=$('standBody'); const rivals=Array.isArray(state.rivals)?state.rivals:[];
+  // remember each column's scroll so a live re-render doesn't jump back to the top
+  const _scroll={};
+  sb.querySelectorAll('.stand-col').forEach(c=>{ const l=c.querySelector('.stand-list'); if(c.dataset.cls&&l) _scroll[c.dataset.cls]=l.scrollTop; });
   if(!rivals.length){ sb.innerHTML='<p class="note">No standings feed yet — appears when telemetry sends rival data.</p>'; }
   else {
     // group by class, order fastest-first; each class gets its OWN scroll column
@@ -349,12 +352,15 @@ function renderStandings(){
             `<div class="sst"><span>FUEL/E</span><b>${en(r.fuel_pct)}</b></div>`+
           `</div></div>`;
       });
-      cols+=`<div class="stand-col" style="--cc:${m.color}">`+
+      cols+=`<div class="stand-col" data-cls="${m.name}" style="--cc:${m.color}">`+
         `<div class="stand-col-h"><span class="cls-dot"></span>${m.name}`+
         `<span class="cls-tag">${m.abbr}</span><span class="cls-n">${rows.length} cars</span></div>`+
         `<div class="stand-list cscroll">${list}</div></div>`;
     });
     sb.innerHTML=`<div class="stand-cols">${cols}</div>`;
+    // restore the scroll positions captured before the rebuild
+    sb.querySelectorAll('.stand-col').forEach(c=>{ const l=c.querySelector('.stand-list');
+      if(c.dataset.cls&&l&&_scroll[c.dataset.cls]!=null) l.scrollTop=_scroll[c.dataset.cls]; });
   }
   // our sectors
   const se=$('sectorBody'); const s=state.sectors;
