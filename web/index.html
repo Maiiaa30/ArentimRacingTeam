@@ -353,13 +353,22 @@ function lockedStints(){
 }
 function regen(){ currentPlan = Engine.regenerate(cfg, wx, curState(), lockedStints()); }
 
+const EV_KEY = 'arentim_pitwall_events';
+let eventLog = [];
+try { const s=JSON.parse(localStorage.getItem(EV_KEY)||'[]'); if(Array.isArray(s)) eventLog=s; } catch(e){}
+function renderEventLog(){
+  const log=$('evLog'); if(!log) return;
+  log.innerHTML = eventLog.map(e=>
+    `<div class="ev-item"><span class="ev-t">L${e.lap}</span> ${e.reason} → ${e.stops} stops left · `+
+    `finish ${e.finish?'<span class="ok">OK</span>':'<span class="bad">NO</span>'}</div>`
+  ).reverse().join('');
+}
 function logEvent(reason){
   const futureStops = currentPlan.stints.filter(s=> s.in_lap > state.laps_done).length;
   const m = Engine.liveMetrics(cfg, {...state, remaining_stops:futureStops}, currentPlan, wx);
-  const li=document.createElement('div'); li.className='ev-item';
-  li.innerHTML = `<span class="ev-t">L${state.laps_done}</span> ${reason} → ${futureStops} stops left · `+
-    `finish ${m.make_finish?'<span class="ok">OK</span>':'<span class="bad">NO</span>'}`;
-  const log=$('evLog'); log.insertBefore(li, log.firstChild);
+  eventLog.push({ lap: state.laps_done, reason, stops: futureStops, finish: !!m.make_finish, ts: new Date().toISOString() });
+  try { localStorage.setItem(EV_KEY, JSON.stringify(eventLog)); } catch(e){}
+  renderEventLog();
 }
 
 // ---- fuel-save calculator ----
@@ -580,6 +589,7 @@ PitDB.onState(s => {
 
 render();
 updateConn();
+renderEventLog();
 </script>
 </body>
 </html>
