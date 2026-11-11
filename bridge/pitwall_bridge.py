@@ -204,14 +204,18 @@ def demo_state(tick):
             "s3": round((95.0 * (1.12 if wet else 1.0)) * 0.28, 3),
         },
         "rivals": [
-            {"pos": p, "name": nm, "cls": "GT3",
-             "gap_s": 0 if p == 3 else round((p - 3) * 4.5, 1),
-             "last_lap_s": round(95.0 + (p - 3) * 0.3, 3),
-             "laps": lap - (1 if p > 5 else 0),
-             "in_pits": False, "is_us": p == 3}
-            for p, nm in enumerate(
-                ["#7 Toyota", "#51 Ferrari", "#30 ARENTIM", "#6 Porsche",
-                 "#2 Cadillac", "#93 Peugeot", "#15 BMW", "#35 Alpine"], start=1)
+            {"pos": p, "name": nm, "cls": cl,
+             "gap_s": 0 if nm == "#30 ARENTIM" else round(p * 3.5, 1),
+             "last_lap_s": round((95.0 - (8 if cl == "Hypercar" else 0)) + p * 0.2, 3),
+             "laps": lap + (int(lap * 0.08) if cl == "Hypercar" else 0),
+             "in_pits": False, "is_us": nm == "#30 ARENTIM"}
+            for p, (nm, cl) in enumerate([
+                ("#7 Toyota", "Hypercar"), ("#51 Ferrari", "Hypercar"),
+                ("#2 Cadillac", "Hypercar"), ("#6 Porsche", "Hypercar"),
+                ("#92 Porsche", "GT3"), ("#30 ARENTIM", "GT3"),
+                ("#15 BMW", "GT3"), ("#88 Lambo", "GT3"),
+                ("#46 Aston", "GT3"), ("#777 Merc", "GT3"),
+            ], start=1)
         ],
         "updated_at": _now_iso(),
     }

@@ -76,20 +76,30 @@
 <script>
 // fabricate a plausible field of rivals around our position (dev only)
 function genRivals(myPos, myLast, myLap){
-  const names=['#7 Toyota','#51 Ferrari','#2 Cadillac','#6 Porsche','#15 BMW','#93 Peugeot','#35 Alpine','#12 Lambo'];
-  const N=8; const out=[]; let gap=0;
-  for(let i=0;i<N;i++){
+  // mixed field: Hypercars (faster) up top, then LMGT3; our car is GT3 #30
+  const field=[
+    {name:'#7 Toyota',   cls:'Hypercar'}, {name:'#51 Ferrari', cls:'Hypercar'},
+    {name:'#2 Cadillac', cls:'Hypercar'}, {name:'#6 Porsche',  cls:'Hypercar'},
+    {name:'#92 Porsche', cls:'GT3'}, {name:'#30 ARENTIM', cls:'GT3'},
+    {name:'#15 BMW',     cls:'GT3'}, {name:'#88 Lambo',   cls:'GT3'},
+    {name:'#46 Aston',   cls:'GT3'}, {name:'#777 Merc',   cls:'GT3'},
+  ];
+  const out=[]; let gap=0;
+  field.forEach((c,i)=>{
     const p=i+1;
-    const mine = p===myPos;
-    gap += (i===0?0: 2 + Math.random()*8);
+    const mine = c.name==='#30 ARENTIM';
+    const hyper = c.cls==='Hypercar';
+    gap += (i===0?0: (hyper?1.5:2) + Math.random()*6);
+    // hypercars ~8s/lap faster than GT3
+    const base = (myLast||95) - (hyper?8:0);
     out.push({
-      pos:p, name: mine?'#30 ARENTIM':names[i%names.length], cls:'GT3',
+      pos:p, name:c.name, cls:c.cls,
       gap_s: mine?0: +gap.toFixed(1),
-      last_lap_s: +( (myLast||95) + (Math.random()*2-0.8) ).toFixed(3),
-      laps: (myLap||0) - (Math.random()<0.2?1:0),
+      last_lap_s: +( base + (Math.random()*2-0.8) ).toFixed(3),
+      laps: (myLap||0) + (hyper?Math.ceil((myLap||0)*0.08):0) - (Math.random()<0.2?1:0),
       in_pits: Math.random()<0.08, is_us: mine
     });
-  }
+  });
   return out;
 }
 function state(){

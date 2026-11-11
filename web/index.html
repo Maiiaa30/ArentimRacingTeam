@@ -55,10 +55,10 @@
 
   <div class="grid mid">
     <!-- plan -->
-    <div class="panel">
+    <div class="panel strat">
       <h2>Race strategy</h2>
       <div class="plan-stats" id="planStats"></div>
-      <div class="tbl-scroll">
+      <div class="tbl-scroll cscroll">
         <table>
           <thead><tr><th>#</th><th>Drv</th><th>Lap</th><th>Clock</th><th>Tire</th><th>Act</th><th>Fuel</th><th>Laps</th><th>Stint</th></tr></thead>
           <tbody id="plan"></tbody>
@@ -87,6 +87,7 @@
         <div class="kv"><span class="k">Current set wear</span><span class="v" id="tireWear">—</span></div>
         <div class="kv"><span class="k">Laps on set</span><span class="v" id="tireLaps">—</span></div>
         <div class="kv"><span class="k">Wear-out in</span><span class="v" id="wearOut">—</span></div>
+        <div class="twheels" id="twheels"></div>
       </div>
       <div class="panel evpanel">
         <h2>Events</h2>
@@ -102,7 +103,7 @@
           <button onclick="openStandings()">Standings</button>
         </div>
         <p class="note">Locks past stints, regenerates the rest of the race.</p>
-        <div id="evLog" class="ev-log"></div>
+        <div id="evLog" class="ev-log cscroll"></div>
       </div>
     </div>
   </div>
@@ -144,7 +145,7 @@
     <button class="x" onclick="closeStandings()">✕</button>
     <h2>Standings &amp; rivals</h2>
     <p class="note" style="margin-top:0">Live field — gaps, pace and pit status. Our car highlighted. Sector times for our last lap below.</p>
-    <div id="standBody"></div>
+    <div id="standBody" class="cscroll"></div>
     <div id="sectorBody"></div>
   </div>
 </div>
@@ -252,22 +253,57 @@ function measuredFuelPerLap(){
 }
 
 // standings / sectors modal
+// class metadata — reusable across races (LMU: Hypercar + LMGT3; add more here)
+const CLASS_META = {
+  'HYPERCAR':{name:'Hypercar',abbr:'HY', color:'#ff4d4d'},
+  'LMH':     {name:'Hypercar',abbr:'HY', color:'#ff4d4d'},
+  'HY':      {name:'Hypercar',abbr:'HY', color:'#ff4d4d'},
+  'LMP2':    {name:'LMP2',    abbr:'P2', color:'#38d6c6'},
+  'GTE':     {name:'GTE',     abbr:'GTE',color:'#ffb000'},
+  'LMGT3':   {name:'LMGT3',   abbr:'GT3',color:'#3ea6ff'},
+  'GT3':     {name:'LMGT3',   abbr:'GT3',color:'#3ea6ff'},
+};
+const CLASS_ORDER = ['Hypercar','LMP2','GTE','LMGT3'];   // fastest class first
+function classMeta(c){
+  const k=(c||'').toUpperCase();
+  return CLASS_META[k] || {name:(c||'Other'),abbr:(c||'?'),color:'#7d8795'};
+}
 function openStandings(){ const m=$('standModal'); m.classList.add('open'); renderStandings(); }
 function closeStandings(){ $('standModal').classList.remove('open'); }
 function renderStandings(){
   const sb=$('standBody'); const rivals=Array.isArray(state.rivals)?state.rivals:[];
   if(!rivals.length){ sb.innerHTML='<p class="note">No standings feed yet — appears when telemetry sends rival data.</p>'; }
   else {
-    const rows=rivals.slice().sort((a,b)=>(a.pos||99)-(b.pos||99)).map(r=>{
-      const us=r.is_us?' class="us"':'';
-      const gap=r.is_us?'—':(r.gap_s!=null?('+'+(+r.gap_s).toFixed(1)):'—');
-      const pit=r.in_pits?'<span class="tag-pit">PIT</span>':'';
-      return `<tr${us}><td>P${r.pos}</td><td>${r.name||'—'} ${pit}</td>`+
-        `<td>${r.cls||''}</td><td>${gap}</td>`+
-        `<td>${r.last_lap_s!=null?fmtLap(+r.last_lap_s):'—'}</td><td>${r.laps!=null?r.laps:'—'}</td></tr>`;
-    }).join('');
+    // group by class, order classes fastest-first, sort within class by position
+    const groups={};
+    rivals.forEach(r=>{ const m=classMeta(r.cls); (groups[m.name]=groups[m.name]||[]).push(r); });
+    const names=Object.keys(groups).sort((a,b)=>{
+      const ia=CLASS_ORDER.indexOf(a), ib=CLASS_ORDER.indexOf(b);
+      return (ia<0?99:ia)-(ib<0?99:ib);
+    });
+    let body='';
+    names.forEach(nm=>{
+      const m=classMeta(nm);
+      const rows=groups[nm].slice().sort((a,b)=>(a.pos||99)-(b.pos||99));
+      body+=`<tbody class="cls-group" style="--cc:${m.color}">`;
+      body+=`<tr class="cls-head"><td colspan="6"><span class="cls-dot"></span>`+
+        `${m.name}<span class="cls-tag">${m.abbr}</span><span class="cls-n">${rows.length} cars</span></td></tr>`;
+      rows.forEach((r,ci)=>{
+        const us=r.is_us?' us':'';
+        const gap=r.is_us?'—':(r.gap_s!=null?('+'+(+r.gap_s).toFixed(1)):'—');
+        const pit=r.in_pits?'<span class="tag-pit">PIT</span>':'';
+        body+=`<tr class="cls-row${us}">`+
+          `<td class="rk"><b>${ci+1}</b><span class="opos">P${r.pos}</span></td>`+
+          `<td class="car">${r.name||'—'} ${pit}</td>`+
+          `<td class="cls"><span class="cls-chip">${m.abbr}</span></td>`+
+          `<td>${gap}</td>`+
+          `<td>${r.last_lap_s!=null?fmtLap(+r.last_lap_s):'—'}</td>`+
+          `<td>${r.laps!=null?r.laps:'—'}</td></tr>`;
+      });
+      body+=`</tbody>`;
+    });
     sb.innerHTML=`<table class="laptbl stand"><thead><tr><th>Pos</th><th>Car</th><th>Cls</th>`+
-      `<th>Gap</th><th>Last</th><th>Laps</th></tr></thead><tbody>${rows}</tbody></table>`;
+      `<th>Gap</th><th>Last</th><th>Laps</th></tr></thead>${body}</table>`;
   }
   // our sectors
   const se=$('sectorBody'); const s=state.sectors;
@@ -356,6 +392,20 @@ function render(){
   const tyreLimited = lapsToLimit!=null && lapsToLimit < m.pit_in_laps;
   wo.style.color = tyreLimited ? 'var(--bad)' : lapsToLimit!=null && lapsToLimit<8 ? 'var(--warn)' : '';
   if(tyreLimited) wo.textContent += ' · tyre-limited';
+
+  // per-wheel tyre grid: wear % always; temp only when the feed provides it (spec mode may not)
+  const tw=$('twheels');
+  if(tw){
+    const wn=['FL','FR','RL','RR'];
+    tw.innerHTML = (state.wheels||[]).slice(0,4).map((w,i)=>{
+      const wear=Math.round((w.wear||0)*100);
+      const wcls=(w.flat||w.detached)?'bad':wear>=60?'warn':'ok';
+      const temp=(w.temp!=null)?Math.round(w.temp)+'°':'';
+      return `<div class="tw"><div class="tw-n">${wn[i]}</div>`+
+        `<div class="tw-pct ${wcls}">${wear}%</div>`+
+        (temp?`<div class="tw-temp">${temp}</div>`:`<div class="tw-temp dim">—</div>`)+`</div>`;
+    }).join('');
+  }
 
   const over = plan.tires_over_budget, pct=Math.min(100,plan.tires_used/cfg.tire_budget*100);
   $('tireCount').textContent = plan.tires_used+' / '+cfg.tire_budget;
@@ -521,12 +571,25 @@ function regen(){ currentPlan = Engine.regenerate(cfg, wx, curState(), lockedSti
 const EV_KEY = 'arentim_pitwall_events';
 let eventLog = [];
 try { const s=JSON.parse(localStorage.getItem(EV_KEY)||'[]'); if(Array.isArray(s)) eventLog=s; } catch(e){}
+function evKind(reason){
+  const r=(reason||'').toLowerCase();
+  if(r.includes('rain')||r.includes('wet')||r.includes('dry')) return {k:'wx',  ic:'🌧'};
+  if(r.includes('pit')) return {k:'pit', ic:'⛽'};
+  if(r.includes('damage')||r.includes('incident')||r.includes('impact')||r.includes('repair')) return {k:'dmg', ic:'💥'};
+  if(r.includes('pace')||r.includes('flag')||r.includes('yellow')) return {k:'pace',ic:'⚑'};
+  return {k:'info', ic:'•'};
+}
 function renderEventLog(){
   const log=$('evLog'); if(!log) return;
-  log.innerHTML = eventLog.map(e=>
-    `<div class="ev-item"><span class="ev-t">L${e.lap}</span> ${e.reason} → ${e.stops} stops left · `+
-    `finish ${e.finish?'<span class="ok">OK</span>':'<span class="bad">NO</span>'}</div>`
-  ).reverse().join('');
+  if(!eventLog.length){ log.innerHTML='<p class="note" style="margin:6px 2px">No events yet — pit stops, weather and incidents log here.</p>'; return; }
+  log.innerHTML = eventLog.map(e=>{
+    const {k,ic}=evKind(e.reason);
+    return `<div class="ev-item ${k}"><span class="ev-ic">${ic}</span>`+
+      `<div class="ev-body"><div class="ev-row1"><span class="ev-t">L${e.lap}</span>`+
+      `<span class="ev-reason">${e.reason}</span></div>`+
+      `<div class="ev-meta">${e.stops} stops left · finish `+
+      `${e.finish?'<span class="ok">OK</span>':'<span class="bad">NO</span>'}</div></div></div>`;
+  }).reverse().join('');
 }
 function logEvent(reason){
   const futureStops = currentPlan.stints.filter(s=> s.in_lap > state.laps_done).length;
