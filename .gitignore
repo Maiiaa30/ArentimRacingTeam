@@ -1,6 +1,8 @@
 # secrets — never commit
 .env
 .env.*
+!.env.example
+!bridge/.env.example
 *.key
 secrets.*
 supabase.local.js
@@ -10,6 +12,10 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+
+# vendored telemetry readers (cloned beside the bridge on the game PC)
+bridge/pyLMUSharedMemory/
+bridge/pyRfactor2SharedMemory/
 
 # node (if tooling added later)
 node_modules/

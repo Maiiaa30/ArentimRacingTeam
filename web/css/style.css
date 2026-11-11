@@ -391,6 +391,8 @@ label.fld{display:flex;justify-content:space-between;align-items:center;gap:10px
 .chip.flag.f-yellow{color:#ffce45;border-color:rgba(242,182,0,.5);background:rgba(242,182,0,.10)}
 .chip.flag.f-fcy{color:#ffb000;border-color:rgba(242,150,0,.6);background:rgba(242,150,0,.14);
   animation:fcyblink 1.1s steps(1) infinite}
+.chip.flag.f-red{color:#ff6b6b;border-color:rgba(230,60,60,.6);background:rgba(230,60,60,.14);
+  animation:fcyblink 1.1s steps(1) infinite}
 .chip.flag.f-chk{color:var(--txt);border-color:var(--line2);
   background:repeating-linear-gradient(45deg,#1a1f27 0 6px,#2b323d 6px 12px)}
 @keyframes fcyblink{50%{background:rgba(242,150,0,.30)}}

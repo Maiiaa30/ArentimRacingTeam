@@ -42,7 +42,16 @@ window.PitDB = (() => {
   const subscribers = [];    // onState callbacks
   const CDN = 'https://esm.sh/@supabase/supabase-js@2';
 
-  function emit(data){ if(data) subscribers.forEach(cb => { try { cb(data); } catch(_){} }); }
+  // Dedupe by updated_at so the realtime push and the poll fallback below never
+  // double-fire for the same state.
+  let _lastStamp = null;
+  function emit(data){
+    if(!data) return;
+    const stamp = data.updated_at || data._t || null;
+    if(stamp && stamp === _lastStamp) return;
+    _lastStamp = stamp;
+    subscribers.forEach(cb => { try { cb(data); } catch(_){} });
+  }
 
   async function connect(){
     try {
@@ -60,6 +69,21 @@ window.PitDB = (() => {
             { event:'*', schema:'public', table:'race_state', filter:'id=eq.1' },
             payload => { const d = payload.new && payload.new.data; if(d) emit(d); })
         .subscribe();
+
+      // Safety-net poll: if realtime isn't enabled on the table (common), the board
+      // still updates on its own without a page refresh. Dedupe (emit) skips the
+      // overlap when realtime IS working. 3s ≈ live enough for a 6h race, tiny load.
+      setInterval(async () => {
+        try {
+          const { data, error } = await client
+            .from('race_state').select('data, updated_at').eq('id', 1).single();
+          if(!error && data && data.data){
+            const d = data.data;
+            if(data.updated_at && !d.updated_at) d.updated_at = data.updated_at;
+            emit(d);
+          }
+        } catch(_){}
+      }, 3000);
 
       ready = true;
       // flush anything pushed before we connected (keep only the latest)

@@ -7,8 +7,10 @@ Do this once per PC.
 ## 1. Prerequisites
 
 - **Le Mans Ultimate** installed.
-- **rF2 Shared Memory Map Plugin** enabled (the DLL in the game's `Plugins\` folder,
-  turned on in the game's plugin config). Without it there's no telemetry to read.
+- **LMU shared memory enabled.** LMU ships its own shared-memory interface (no
+  external DLL). If `--print` reads all-null/errors, enable it: edit
+  `Le Mans Ultimate\UserData\player\CustomPluginVariables.JSON`, set the shared
+  memory entry `"Enabled": 1`, then restart the game.
 - **Python 3** for Windows — https://python.org (tick "Add Python to PATH" in the installer).
 
 Check Python in a Command Prompt / PowerShell:
@@ -21,8 +23,13 @@ python --version
 ```
 git clone https://github.com/Maiiaa30/ArentimRacingTeam.git
 cd ArentimRacingTeam\bridge
-pip install -r requirements.txt
+git clone https://github.com/TinyPedal/pyLMUSharedMemory.git
 ```
+
+> The telemetry reader (`pyLMUSharedMemory`) is **not** a pip package — it's a
+> library you clone **inside** the `bridge\` folder (so it sits next to
+> `pitwall_bridge.py`). `--demo` / `--print` with no game need nothing else.
+> LMU uses its *own* built-in shared memory, not the old rF2 plugin.
 
 ## 3. Validate FIRST (no account needed)
 
@@ -36,18 +43,22 @@ that stays `null` isn't exposed by the game and is entered manually in the dashb
 
 ## 4. Feed the live pit wall
 
-Make the launcher from the template (keeps the passcode out of git):
+Make a `.env` from the template (keeps the passcode out of git — `.env` is gitignored):
 ```
-copy start-bridge.example.bat start-bridge.bat
-notepad start-bridge.bat
+copy .env.example .env
+notepad .env
 ```
-Fill in the three values (ask the team owner for them):
+Fill the two blanks (ask the team owner — URL is already filled in):
 ```
-set SUPA_URL=https://cuinegzqahegrxaodosa.supabase.co
-set SUPA_ANON=<anon public key>
-set SUPA_PASSCODE=<shared write passcode>
+SUPA_URL=https://cuinegzqahegrxaodosa.supabase.co
+SUPA_ANON=<anon public key>
+SUPA_PASSCODE=<shared write passcode>
 ```
-Save. Then just **double-click `start-bridge.bat`** (or run it) whenever you drive.
+Save. The bridge loads `.env` automatically, so just run:
+```
+python pitwall_bridge.py --supabase
+```
+(or double-click `start-bridge.bat` if you prefer the launcher).
 Telemetry flows game → Supabase → the pit wall on every device. Close the window to stop.
 
 ## Driver-swap note

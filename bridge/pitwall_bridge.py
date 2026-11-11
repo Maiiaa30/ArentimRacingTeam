@@ -20,13 +20,14 @@ Examples:
     SUPA_URL=https://x.supabase.co SUPA_ANON=eyJ... SUPA_PASSCODE=word \
         python3 pitwall_bridge.py --supabase
 
-The shared-memory field names below follow pyRfactor2SharedMemory / the rF2 plugin.
+The shared-memory field names below follow LMU's built-in interface via pyLMUSharedMemory.
 Anything the game does NOT expose stays None and is entered manually in the dashboard.
 See README.md for the field-validation checklist.
 """
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import urllib.request
@@ -38,84 +39,163 @@ POLL_HZ = 2  # updates per second
 # Shared-memory reader (real game)
 # ---------------------------------------------------------------------------
 def open_shared_memory():
-    """Return an rF2 shared-memory reader, or None if unavailable."""
+    """Return an LMU shared-memory reader (lmu_data.SimInfo), or None if unavailable.
+
+    Le Mans Ultimate exposes its OWN built-in shared memory (file "LMU_Data"), not
+    the classic rF2 Iron Wolf plugin buffers. We read it via TinyPedal's
+    pyLMUSharedMemory. Clone it next to this file on the Windows game PC:
+        git clone https://github.com/TinyPedal/pyLMUSharedMemory.git
+    """
     try:
-        # pip install pyRfactor2SharedMemory  (Windows, game running)
-        from pyRfactor2SharedMemory.sharedMemoryAPI import SimInfoAPI
-        info = SimInfoAPI()
+        from pyLMUSharedMemory import lmu_data
+        info = lmu_data.SimInfo()
+        # touch the buffer so a dead/zero mapping fails here, not mid-read
+        _ = info.LMUData.scoring.scoringInfo.mNumVehicles
         return info
     except Exception as e:
         print(f"[bridge] shared memory not available: {e}", file=sys.stderr)
+        print("[bridge] need pyLMUSharedMemory cloned beside this file, LMU running, "
+              "and the game's shared-memory plugin enabled.", file=sys.stderr)
         return None
 
 
-def read_state(info):
-    """Map rF2 shared memory -> the dashboard's state dict.
+def _norm_class(c):
+    """LMU class text -> a key the dashboard's CLASS_META knows (Hypercar/LMP2/LMGT3)."""
+    if not c:
+        return "GT3"
+    k = c.strip().lower()
+    if k.startswith("hyper") or k in ("lmh", "lmdh"):
+        return "Hypercar"
+    if "lmp2" in k:
+        return "LMP2"
+    if "gt3" in k or k == "lmgt3":
+        return "LMGT3"
+    return c.strip()
 
-    Field sources are best-effort; names vary slightly across plugin versions, so
-    each is guarded. A None value means 'not exposed' -> manual entry in the UI.
+
+def _parse_veh(raw):
+    """LMU mVehicleName -> (clean_name, manuf, team, num).
+
+    'Cadillac Hertz Team Jota 2026 #12:LM'
+      -> ('Cadillac Hertz Team Jota 2026 #12', 'Cadillac', 'Hertz Team Jota', '12')
     """
-    tele = info.playersVehicleTelemetry()
-    scor = info.playersVehicleScoring()
+    raw = (raw or "").split(":")[0].strip()        # drop trailing class tag ":LM"
+    if not raw:
+        return ("", "", "", None)
+    m = re.search(r"#(\w+)", raw)
+    num = m.group(1) if m else None
+    base = re.sub(r"\s*#\w+", "", raw).strip()      # drop the car number
+    toks = base.split()
+    manuf = toks[0] if toks else ""
+    rest = base[len(manuf):].strip()
+    team = re.sub(r"\s*\b(?:19|20)\d{2}\b", "", rest).strip() or rest  # drop year
+    return (raw, manuf, team, num)
+
+
+def read_state(info):
+    """Map LMU shared memory -> the dashboard's state dict (unchanged output shape).
+
+    Field names come from pyLMUSharedMemory (S397 SharedMemoryInterface header).
+    Still best-effort until validated against a live --print; a None value means
+    'not exposed' -> manual entry in the UI. All name/char fields come back as bytes.
+    """
+    D = info.LMUData
+    pidx = D.telemetry.playerVehicleIdx          # telemetry array index of player
+    tele = D.telemetry.telemInfo[pidx]           # LMUVehicleTelemetry (player)
+    si = D.scoring.scoringInfo                   # LMUScoringInfo (session)
 
     def g(obj, name, default=None):
         try:
-            return getattr(obj, name)
+            v = getattr(obj, name)
+            return v if v is not None else default
         except Exception:
             return default
 
-    fuel = g(tele, "mFuel")
+    def dec(x):
+        if isinstance(x, (bytes, bytearray)):
+            return x.decode("utf-8", "ignore").split("\x00", 1)[0].strip()
+        return x
+
+
+    # scoring array order != telemetry order -> find the player's scoring row by flag.
+    n = int(g(si, "mNumVehicles", 0) or 0)
+    vehicles = D.scoring.vehScoringInfo
+    sidx = pidx
+    try:
+        for i in range(max(0, min(n, len(vehicles)))):
+            if vehicles[i].mIsPlayer:
+                sidx = i
+                break
+    except Exception:
+        pass
+    scor = vehicles[sidx]                         # LMUVehicleScoring (player)
+
+    fuel = g(tele, "mFuel")                        # liters
     last_lap = g(scor, "mLastLapTime")
     best_lap = g(scor, "mBestLapTime")
-    total_laps = g(tele, "mLapNumber", g(scor, "mTotalLaps"))
+    total_laps = g(scor, "mTotalLaps", g(tele, "mLapNumber"))
     place = g(scor, "mPlace")
     in_pits = g(scor, "mInPits")
 
-    # damage: rF2 exposes per-region dent severity; LMU surfaces Aero/Body/Susp/Tyres %.
-    # We pass through what we can read; refine once validated against the game.
+    # damage: LMU exposes 8-location dent severity (0=none,1=some,2=more) + detach flags.
     dents = g(tele, "mDentSeverity", None)
 
-    # wheels (FL,FR,RL,RR): wear + brake temp + tyre temp + pressure
+    # wheels FL,FR,RL,RR: wear(0..1 fraction), brake temp(C), tyre temp(K->C), pressure(kPa)
     wheels = []
     try:
         for w in tele.mWheels[:4]:
+            temps = g(w, "mTemperature")
+            tcen = None
+            if temps:
+                k = temps[1] if len(temps) > 1 else temps[0]   # center sample, Kelvin
+                tcen = round(k - 273.15, 1) if k else None
+            mwear = g(w, "mWear")                 # LMU: life REMAINING (1.0 fresh -> 0 dead)
+            bt = g(w, "mBrakeTemp")               # LMU reports Kelvin despite the "Celsius" doc
             wheels.append({
-                "wear": g(w, "mWear"),
-                "brakeTemp": g(w, "mBrakeTemp"),
-                "temp": g(w, "mTemperature", [None])[0] if g(w, "mTemperature") else None,
-                "press": g(w, "mPressure"),
+                # dashboard wants WORN fraction (0 fresh -> 1 dead), so invert
+                "wear": None if mwear is None else round(max(0.0, 1.0 - mwear), 4),
+                "brakeTemp": None if bt is None else round(bt - 273.15, 1),  # K -> C
+                "temp": tcen,                      # Celsius (center sample)
+                "press": g(w, "mPressure"),        # kPa
                 "flat": bool(g(w, "mFlat", 0)),
                 "detached": bool(g(w, "mDetached", 0)),
             })
     except Exception:
         wheels = []
 
-    # --- global session scoring (temps, flags, clock, rival field) ---
-    sinfo = None
-    try:
-        sinfo = info.Rf2Scor.mScoringInfo
-    except Exception:
-        sinfo = None
+    track_temp = g(si, "mTrackTemp")               # Celsius
+    air_temp = g(si, "mAmbientTemp")               # Celsius
 
-    track_temp = g(sinfo, "mTrackTemp") if sinfo is not None else None
-    air_temp = g(sinfo, "mAmbientTemp") if sinfo is not None else None
-    cur_et = g(sinfo, "mCurrentET") if sinfo is not None else None
-    end_et = g(sinfo, "mEndET") if sinfo is not None else None
-    session_remaining = (end_et - cur_et) if (cur_et is not None and end_et and end_et > 0) else None
+    # session clock: LMU gives remaining directly; fall back to end - current.
+    session_remaining = g(si, "mSessionTimeRemaining")
+    if not session_remaining or session_remaining <= 0:
+        cur_et = g(si, "mCurrentET")
+        end_et = g(si, "mEndET")
+        session_remaining = (end_et - cur_et) if (cur_et is not None and end_et and end_et > 0) else None
 
-    # flag: whole-course yellow state -> green/yellow/fcy; checkered at session end.
-    # rF2 mYellowFlagState: 0 none, 1 pending, 2 pitClosed, 3 pitLeadLap, 4 pitOpen,
-    # 5 lastLap, 6 resume, 7 raceHalt. mGamePhase 5=FullCourseYellow, 8=Checkered.
+    # flag from mGamePhase (rF2/LMU GamePhase enum):
+    #   0 garage, 1 warmup, 2 gridwalk, 3 formation, 4 countdown,
+    #   5 GREEN (racing), 6 full-course yellow, 7 red/stopped, 8 checkered/over.
+    # Local sector yellows (mSectorFlag) only matter once we're actually green.
     flag = "green"
-    phase = g(sinfo, "mGamePhase") if sinfo is not None else None
-    yflag = g(sinfo, "mYellowFlagState") if sinfo is not None else None
-    sflags = g(scor, "mSectorFlag") if scor is not None else None
+    phase = g(si, "mGamePhase")
+    sflags = g(si, "mSectorFlag")
+    local_yellow = bool(sflags and any(int(f) for f in list(sflags)))
     if phase == 8:
         flag = "checkered"
-    elif phase == 5 or (yflag not in (None, 0)):
+    elif phase == 7:
+        flag = "red"
+    elif phase == 6:
         flag = "fcy"
-    elif sflags and any(f for f in list(sflags)):
-        flag = "yellow"
+    elif phase == 5:
+        flag = "yellow" if local_yellow else "green"
+    else:
+        flag = "green"   # pre-race phases 0-4
+
+    # weather snapshot (dashboard reads weather_now)
+    raining = g(si, "mRaining")                    # 0..1 severity
+    wetness = g(si, "mAvgPathWetness")             # 0..1 avg path wetness
+    weather_now = "wet" if ((raining and raining > 0.05) or (wetness and wetness > 0.25)) else "dry"
 
     # sector splits for our last lap (cumulative -> per-sector)
     ls1 = g(scor, "mLastSector1")
@@ -124,28 +204,27 @@ def read_state(info):
     if ls1 and ls1 > 0 and ls2 and ls2 > 0 and last_lap and last_lap > 0:
         sectors = {"s1": round(ls1, 3), "s2": round(ls2 - ls1, 3), "s3": round(last_lap - ls2, 3)}
 
-    # rival field: iterate every scored vehicle (best-effort; names vary by plugin)
+    # rival field: iterate every scored vehicle
     rivals = []
     try:
-        vehicles = info.Rf2Scor.mVehicles
-        n = g(sinfo, "mNumVehicles", len(vehicles)) if sinfo is not None else len(vehicles)
         my_id = g(scor, "mID")
-        def dec(x):
-            return x.decode("utf-8", "ignore") if isinstance(x, (bytes, bytearray)) else x
-        for v in list(vehicles)[: max(0, int(n or 0))]:
+        for i in range(max(0, min(n, len(vehicles)))):
+            v = vehicles[i]
             driver = dec(g(v, "mDriverName") or b"")
-            car = dec(g(v, "mVehicleName") or b"")          # e.g. "Porsche 911 GT3 R #92"
-            cls = dec(g(v, "mVehicleClass") or b"") or "GT3"  # e.g. "LMGT3" / "Hypercar"
-            manuf = car.split()[0] if car else ""           # first token ~ manufacturer
+            raw_car = dec(g(v, "mVehicleName") or b"")    # "Cadillac Hertz Team Jota 2026 #12:LM"
+            cls = _norm_class(dec(g(v, "mVehicleClass") or b""))
+            name, manuf, team, num = _parse_veh(raw_car)
+            if not team:
+                team = dec(g(v, "mPitGroup") or b"")      # fallback: pit group
             vll = g(v, "mLastLapTime")
             vbl = g(v, "mBestLapTime")
             rivals.append({
                 "pos": g(v, "mPlace"),
-                "name": car or driver,
-                "num": None,
+                "name": name or driver,
+                "num": num,
                 "manuf": manuf,
-                "model": car,
-                "team": car,                                 # rF2 has no team field; reuse car name
+                "model": name,
+                "team": team or name,
                 "driver": driver,
                 "cls": cls,
                 "gap_s": g(v, "mTimeBehindLeader"),
@@ -158,25 +237,69 @@ def read_state(info):
     except Exception:
         rivals = []
 
+    # --- damage, derived ONLY from real LMU signals (no invented category %) ---
+    # LMU exposes: 8-location dent severity (0=none,1=some,2=more), per-part/-wheel
+    # detach, and per-wheel flat. It does NOT expose Aero/Body/Susp/Tyre % directly,
+    # so anything we can't measure is sent as null -> dashboard shows "—", not a guess.
+    dent_list = list(dents) if dents is not None else None
+    body_pct = round(sum(int(d) for d in dent_list) / (len(dent_list) * 2) * 100) if dent_list else None
+    any_flat = any(w.get("flat") for w in wheels) if wheels else False
+    any_wheel_off = any(w.get("detached") for w in wheels) if wheels else False
+    parts_off = bool(g(tele, "mDetached"))        # any non-wheel part detached
+    susp_pct = 100 if any_wheel_off else 0
+    tyres_pct = 100 if (any_flat or any_wheel_off) else 0
+
+    # last impact (real): magnitude + how long ago (session seconds)
+    imag = g(tele, "mLastImpactMagnitude")
+    iet = g(tele, "mLastImpactET")
+    et = g(tele, "mElapsedTime")
+    last_impact_mag = round(imag, 1) if imag else None
+    last_impact_ago_s = round(et - iet, 1) if (iet and iet > 0 and et) else None
+
+    # gap to car ahead (real). gap behind isn't directly on our own row in LMU.
+    gap_ahead = g(scor, "mTimeBehindNext")
+    gap_ahead = round(gap_ahead, 3) if (gap_ahead and gap_ahead > 0) else None
+
     return {
         "fuel_now": fuel,
+        "fuel_capacity": g(tele, "mFuelCapacity"),
         "last_lap_s": None if not last_lap or last_lap < 0 else last_lap,
         "best_lap_s": None if not best_lap or best_lap < 0 else best_lap,
         "laps_done": total_laps,
+        "elapsed_s": g(si, "mCurrentET"),           # real session elapsed (for weather/regen)
         "position": place,
         "cls_position": place,
+        "gap_ahead_s": gap_ahead,
+        "gap_behind_s": None,                        # LMU: not exposed for our own car
+        "penalties": g(scor, "mNumPenalties"),
+        "scheduled_stops": g(tele, "mScheduledStops"),
         "in_pits": bool(in_pits) if in_pits is not None else None,
-        "current_driver": (g(scor, "mDriverName") or b"").decode("utf-8", "ignore")
-                           if isinstance(g(scor, "mDriverName"), (bytes, bytearray))
-                           else g(scor, "mDriverName"),
+        "current_driver": dec(g(scor, "mDriverName")),
         "wheels": wheels or None,
         "flag": flag,
+        "weather_now": weather_now,
         "track_temp": track_temp,
         "air_temp": air_temp,
         "session_remaining_s": session_remaining,
         "sectors": sectors,
         "rivals": rivals or None,
-        "_dents": list(dents) if dents is not None else None,
+        # damage: real-derived where possible, null where LMU can't measure it
+        "aero_pct": None,                            # LMU can't isolate aero damage
+        "body_pct": body_pct,                        # from dent severity (real)
+        "susp_pct": susp_pct,                        # 100 if a wheel is detached
+        "tyres_pct": tyres_pct,                      # 100 if a wheel is flat/detached
+        "repair_s": None,                            # LMU repair estimate not in this buffer
+        "parts_detached": parts_off,
+        "last_impact_mag": last_impact_mag,
+        "last_impact_ago_s": last_impact_ago_s,
+        # fields LMU doesn't feed -> null so the dashboard blanks them (never fake):
+        "avg_lap_live": None,                        # derived on dashboard from lap history
+        "stint_time_s": None,
+        "lap_delta_s": None,                         # dashboard derives last - best
+        "last_pit_lap": None,                        # dashboard derives from pit transitions
+        "laps_on_tires": None,
+        "tire_wear_pct": None,                       # dashboard derives from wheels
+        "_dents": dent_list,
         "updated_at": _now_iso(),
     }
 
@@ -268,7 +391,32 @@ def _now_iso():
 
 
 # ---------------------------------------------------------------------------
+def load_dotenv():
+    """Load KEY=VALUE lines from a .env next to this script into os.environ.
+
+    Keeps secrets out of the command line and out of git (.env is gitignored).
+    Existing real environment variables win over the file. No dependency needed.
+    """
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if not os.path.isfile(path):
+        return
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            for raw in fh:
+                line = raw.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, val = line.partition("=")
+                key = key.strip()
+                val = val.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = val
+    except Exception as e:
+        print(f"[bridge] could not read .env: {e}", file=sys.stderr)
+
+
 def main():
+    load_dotenv()
     ap = argparse.ArgumentParser(description="Pit Wall telemetry bridge (LMU/rF2)")
     ap.add_argument("--print", dest="do_print", action="store_true",
                     help="print mapped fields (validate the game exposes them)")
