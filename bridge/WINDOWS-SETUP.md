@@ -23,13 +23,12 @@ python --version
 ```
 git clone https://github.com/Maiiaa30/ArentimRacingTeam.git
 cd ArentimRacingTeam\bridge
-git clone https://github.com/TinyPedal/pyLMUSharedMemory.git
 ```
 
-> The telemetry reader (`pyLMUSharedMemory`) is **not** a pip package — it's a
-> library you clone **inside** the `bridge\` folder (so it sits next to
-> `pitwall_bridge.py`). `--demo` / `--print` with no game need nothing else.
-> LMU uses its *own* built-in shared memory, not the old rF2 plugin.
+> That's it — nothing to pip install. The telemetry reader
+> (`pyLMUSharedMemory`) is **vendored into the repo** (the `bridge\pyLMUSharedMemory\`
+> folder), so one clone has everything. LMU uses its *own* built-in shared
+> memory, not the old rF2 plugin. `--demo` / `--print` need no extra setup.
 
 ## 3. Validate FIRST (no account needed)
 

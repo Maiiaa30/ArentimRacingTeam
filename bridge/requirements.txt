@@ -1,12 +1,9 @@
 # Pit Wall telemetry bridge deps.
 #
-# Reading the game (Windows, Le Mans Ultimate running):
-#   LMU exposes its OWN built-in shared memory ("LMU_Data"), not the classic rF2
-#   Iron Wolf plugin. The reader library is NOT on PyPI -- clone it next to
-#   pitwall_bridge.py (same folder) so `from pyLMUSharedMemory import lmu_data`
-#   resolves:
+# Nothing to install. The reader for LMU's built-in shared memory
+# (pyLMUSharedMemory) is VENDORED in this folder (bridge/pyLMUSharedMemory/),
+# so a single `git clone` of the repo has everything.
 #
-#     git clone https://github.com/TinyPedal/pyLMUSharedMemory.git
-#
-# Supabase push and demo/print modes use only the Python standard library
-# (urllib) -- nothing to install for those.
+# --demo / --print / --supabase use only the Python standard library.
+# Reading the live game needs Windows + Le Mans Ultimate running (WSL/Linux
+# cannot read the game's shared memory).
