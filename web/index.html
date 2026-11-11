@@ -766,8 +766,8 @@ function renderEventLog(){
     log.innerHTML=empty; const full=$('evLogFull'); if(full) full.innerHTML=empty; return;
   }
   const items = eventLog.map(evItemHtml).reverse();
-  // inline panel shows the most recent few (preview); modal shows all.
-  log.innerHTML = items.slice(0, 6).join('');
+  // inline panel fills its space and scrolls (newest first); modal = focused big view.
+  log.innerHTML = items.join('');
   const full=$('evLogFull'); if(full) full.innerHTML = items.join('');
 }
 function openEvents(){ renderEventLog(); $('evModal').classList.add('open'); }

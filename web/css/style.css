@@ -15,6 +15,14 @@ body{background:
     radial-gradient(1200px 700px at 50% -8%, #141924 0%, var(--bg) 62%);
   color:var(--txt);font-family:var(--sans);min-height:100dvh;overflow-y:auto;
   display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
+/* Desktop: bound the page to the viewport so flex children (events log, strategy
+   table) fill the spare space and scroll INTERNALLY instead of growing the page.
+   Mobile (<=900) keeps natural page scroll — see the stacked-layout media query. */
+@media(min-width:901px){
+  html,body{height:100dvh}
+  body{overflow:hidden}
+  header{flex:0 0 auto}
+}
 
 /* ---- top bar ---- */
 header{position:relative;display:flex;align-items:center;gap:14px;
@@ -48,8 +56,11 @@ header::before{content:"";position:absolute;left:0;top:0;right:0;height:2px;
 .strat .tbl-scroll{flex:1 1 auto;max-height:none;min-height:0}
 /* stretch the plan rows to fill the spare card height instead of leaving a gap */
 .strat .tbl-scroll > table{height:100%}
-.rightcol{grid-template-columns:1fr 1fr;align-content:start}
-.rightcol .evpanel{grid-column:1 / -1}
+/* status/tires take their natural height; the events panel fills the rest of
+   the column so its log uses the spare space instead of leaving it blank */
+.rightcol{grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr;min-height:0}
+.rightcol .evpanel{grid-column:1 / -1;display:flex;flex-direction:column;min-height:0}
+.evpanel .ev-log{flex:1 1 auto;min-height:0;max-height:none}
 
 /* ---- weather timeline strip ---- */
 .wx-strip{display:flex;align-items:center;gap:12px;flex:0 0 auto}
