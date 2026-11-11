@@ -218,6 +218,8 @@ def read_state(info):
                 team = dec(g(v, "mPitGroup") or b"")      # fallback: pit group
             vll = g(v, "mLastLapTime")
             vbl = g(v, "mBestLapTime")
+            ffrac = g(v, "mFuelFraction")             # 0..255 = 0..100% fuel OR battery
+            fuel_pct = round(ffrac / 255 * 100) if ffrac is not None else None
             rivals.append({
                 "pos": g(v, "mPlace"),
                 "name": name or driver,
@@ -231,6 +233,7 @@ def read_state(info):
                 "last_lap_s": None if not vll or vll < 0 else round(vll, 3),
                 "best_lap_s": None if not vbl or vbl < 0 else round(vbl, 3),
                 "laps": g(v, "mTotalLaps"),
+                "fuel_pct": fuel_pct,
                 "in_pits": bool(g(v, "mInPits", 0)),
                 "is_us": (g(v, "mID") == my_id) if my_id is not None else False,
             })
@@ -263,6 +266,10 @@ def read_state(info):
     return {
         "fuel_now": fuel,
         "fuel_capacity": g(tele, "mFuelCapacity"),
+        # Hypercar virtual energy (fraction 0..1) + hybrid battery state (percent).
+        # Null on cars that don't use them -> dashboard shows fuel only.
+        "virtual_energy": g(tele, "mVirtualEnergy"),
+        "state_of_charge": g(tele, "mStateOfCharge"),
         "last_lap_s": None if not last_lap or last_lap < 0 else last_lap,
         "best_lap_s": None if not best_lap or best_lap < 0 else best_lap,
         "laps_done": total_laps,

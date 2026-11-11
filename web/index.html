@@ -309,51 +309,52 @@ function renderStandings(){
   const sb=$('standBody'); const rivals=Array.isArray(state.rivals)?state.rivals:[];
   if(!rivals.length){ sb.innerHTML='<p class="note">No standings feed yet — appears when telemetry sends rival data.</p>'; }
   else {
-    // group by class, order classes fastest-first, sort within class by position
+    // group by class, order fastest-first; each class gets its OWN scroll column
     const groups={};
     rivals.forEach(r=>{ const m=classMeta(r.cls); (groups[m.name]=groups[m.name]||[]).push(r); });
     const names=Object.keys(groups).sort((a,b)=>{
       const ia=CLASS_ORDER.indexOf(a), ib=CLASS_ORDER.indexOf(b);
       return (ia<0?99:ia)-(ib<0?99:ib);
     });
-    let body='';
+    const en=v=>v!=null?Math.round(v)+'%':'—';
+    let cols='';
     names.forEach(nm=>{
       const m=classMeta(nm);
       const rows=groups[nm].slice().sort((a,b)=>(a.pos||99)-(b.pos||99));
-      body+=`<tbody class="cls-group" style="--cc:${m.color}">`;
-      body+=`<tr class="cls-head"><td colspan="9"><span class="cls-dot"></span>`+
-        `${m.name}<span class="cls-tag">${m.abbr}</span><span class="cls-n">${rows.length} cars</span></td></tr>`;
-      let prevGap=null;
+      let prevGap=null, list='';
       rows.forEach((r,ci)=>{
         const us=r.is_us?' us':'';
         const mf=manufMeta(r.manuf||r.name);
-        const car=r.model ? ('#'+(r.num||'?')+' '+(r.manuf||'')+' '+r.model).trim() : (r.name||'—');
+        const title=((r.num?('#'+r.num+' '):'')+(r.manuf||r.name||'')).trim()||'—';
         const team=r.team||'';
         const driver=r.is_us ? (r.driver||state.current_driver||'—') : (r.driver||'—');
         const gap=r.is_us?'—':(r.gap_s!=null?('+'+(+r.gap_s).toFixed(1)):'—');
-        // interval = gap to the car ahead in class
         let intv='—';
-        if(ci===0) intv='LEADER';
+        if(ci===0) intv='LDR';
         else if(!r.is_us && r.gap_s!=null && prevGap!=null) intv='+'+(r.gap_s-prevGap).toFixed(1);
-        if(!r.is_us && r.gap_s!=null) prevGap=r.gap_s;   // our gap is a placeholder; don't skew the next interval
+        if(!r.is_us && r.gap_s!=null) prevGap=r.gap_s;
         const pit=r.in_pits?'<span class="tag-pit">PIT</span>':'';
-        body+=`<tr class="cls-row${us}">`+
-          `<td class="rk"><b>${ci+1}</b><span class="opos">P${r.pos}</span></td>`+
-          `<td class="car">${badgeHtml(mf)}`+
-            `<span class="car-txt"><span class="car-nm">${car} ${pit}</span>`+
-            `<span class="car-team">${team}</span></span></td>`+
-          `<td class="drv">${driver}</td>`+
-          `<td class="cls"><span class="cls-chip">${m.abbr}</span></td>`+
-          `<td class="gp">${gap}</td>`+
-          `<td class="iv ${intv==='LEADER'?'lead':''}">${intv}</td>`+
-          `<td>${r.last_lap_s!=null?fmtLap(+r.last_lap_s):'—'}</td>`+
-          `<td class="dim2">${r.best_lap_s!=null?fmtLap(+r.best_lap_s):'—'}</td>`+
-          `<td>${r.laps!=null?r.laps:'—'}</td></tr>`;
+        const sub=[team,driver].filter(Boolean).join(' · ');
+        list+=`<div class="srow${us}">`+
+          `<div class="srk"><b>${ci+1}</b><i>P${r.pos??'—'}</i></div>`+
+          `${badgeHtml(mf)}`+
+          `<div class="scar"><div class="scar-nm">${title} ${pit}</div>`+
+            `<div class="scar-sub">${sub||'—'}</div></div>`+
+          `<div class="sstats">`+
+            `<div class="sst"><span>GAP</span><b>${gap}</b></div>`+
+            `<div class="sst"><span>INT</span><b class="${intv==='LDR'?'lead':''}">${intv}</b></div>`+
+            `<div class="sst"><span>LAST</span><b>${r.last_lap_s!=null?fmtLap(+r.last_lap_s):'—'}</b></div>`+
+            `<div class="sst"><span>BEST</span><b class="best">${r.best_lap_s!=null?fmtLap(+r.best_lap_s):'—'}</b></div>`+
+            `<div class="sst"><span>LAPS</span><b>${r.laps!=null?r.laps:'—'}</b></div>`+
+            `<div class="sst"><span>FUEL/E</span><b>${en(r.fuel_pct)}</b></div>`+
+          `</div></div>`;
       });
-      body+=`</tbody>`;
+      cols+=`<div class="stand-col" style="--cc:${m.color}">`+
+        `<div class="stand-col-h"><span class="cls-dot"></span>${m.name}`+
+        `<span class="cls-tag">${m.abbr}</span><span class="cls-n">${rows.length} cars</span></div>`+
+        `<div class="stand-list cscroll">${list}</div></div>`;
     });
-    sb.innerHTML=`<table class="laptbl stand"><thead><tr><th>Pos</th><th>Car / Team</th><th>Driver</th>`+
-      `<th>Cls</th><th>Gap</th><th>Int</th><th>Last</th><th>Best</th><th>Laps</th></tr></thead>${body}</table>`;
+    sb.innerHTML=`<div class="stand-cols">${cols}</div>`;
   }
   // our sectors
   const se=$('sectorBody'); const s=state.sectors;
@@ -396,7 +397,8 @@ function render(){
   const realFpl = measuredFuelPerLap();
   const haveFuel = state.fuel_now!=null;
   $('fuelSub').textContent = (haveFuel ? state.fuel_now.toFixed(1)+' L' : '—')
-    + (realFpl!=null ? ' · '+realFpl.toFixed(2)+' L/lap' : '');
+    + (realFpl!=null ? ' · '+realFpl.toFixed(2)+' L/lap' : '')
+    + (state.virtual_energy!=null ? ' · VE '+Math.round(state.virtual_energy*100)+'%' : '');
   if(!haveFuel){ $('fuelLaps').textContent='—'; $('pitIn').textContent='—'; }
 
   $('lapsLeft').textContent = m.laps_left;
@@ -986,7 +988,7 @@ function openTimeline(){ renderTimeline(); $('tlModal').classList.add('open'); }
 function closeTimeline(){ $('tlModal').classList.remove('open'); }
 
 // ---- live sync: receive telemetry/sim state and re-render ----
-const LIVE_FIELDS = ['fuel_now','fuel_capacity','laps_done','stint_lap','avg_lap_live','elapsed_s',
+const LIVE_FIELDS = ['fuel_now','fuel_capacity','virtual_energy','state_of_charge','laps_done','stint_lap','avg_lap_live','elapsed_s',
   'current_driver','stint_time_s','last_lap_s','best_lap_s','position','gap_ahead_s','gap_behind_s',
   'weather_now','penalties','scheduled_stops','aero_pct','body_pct','susp_pct','tyres_pct','repair_s',
   'parts_detached','last_impact_mag','last_impact_ago_s','tire_wear_pct','laps_on_tires','last_pit_lap',
