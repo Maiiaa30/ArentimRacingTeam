@@ -84,6 +84,7 @@
           <button onclick="ev('pace_change')">Pace Change</button>
           <button onclick="openWif()">What-if</button>
           <button onclick="openFuel()">Fuel save</button>
+          <button onclick="openLaps()">Lap log</button>
         </div>
         <p class="note">Locks past stints, regenerates the rest of the race.</p>
         <div id="evLog" class="ev-log"></div>
@@ -119,6 +120,22 @@
     <h2>Car condition</h2>
     <div id="dmgDetails"></div>
     <div id="dmgRec" class="rec"></div>
+  </div>
+</div>
+
+<!-- lap log modal -->
+<div class="modal-bg" id="lapModal" onclick="if(event.target===this)closeLaps()">
+  <div class="modal wide">
+    <button class="x" onclick="closeLaps()">✕</button>
+    <h2>Lap log</h2>
+    <div class="btns" style="margin-top:0">
+      <button onclick="exportLapCsv()">Export CSV</button>
+      <button onclick="if(confirm('Clear the lap log?')){lapLog=[];renderLapLog();}">Clear</button>
+      <span class="chip" id="lapCount">0 laps</span>
+      <span class="chip" id="lapBest">best —</span>
+    </div>
+    <p class="note" style="margin-top:8px">Each completed lap recorded from the live stream — driver, time, fuel, tyre life. Export for post-race review.</p>
+    <div id="lapBody"></div>
   </div>
 </div>
 
@@ -436,13 +453,73 @@ function ev(type){
   render();
 }
 
+// ---- lap log: one row per completed lap, from the live stream ----
+let lapLog = [];
+let _lastLoggedLap = state.laps_done;
+function wxNow(){
+  if(state.weather_now) return state.weather_now;
+  const c = (typeof Engine.conditionAt==='function') ? Engine.conditionAt(wx, state.elapsed_s) : null;
+  return c ? (c.condition || (c.wetness>0?'wet':'dry')) : '—';
+}
+function captureLap(lapNo){
+  lapLog.push({
+    lap: lapNo,
+    lap_s: (state.last_lap_s!=null ? +state.last_lap_s : null),
+    driver: state.current_driver || '—',
+    fuel: (state.fuel_now!=null ? +state.fuel_now : null),
+    tire_laps: (state.laps_on_tires!=null ? state.laps_on_tires : null),
+    pos: (state.position!=null ? state.position : null),
+    wx: wxNow(),
+    ts: new Date().toISOString()
+  });
+  if(document.getElementById('lapModal').classList.contains('open')) renderLapLog();
+}
+function renderLapLog(){
+  const best = lapLog.reduce((m,r)=> (r.lap_s!=null && (m==null||r.lap_s<m)) ? r.lap_s : m, null);
+  $('lapCount').textContent = lapLog.length + ' laps';
+  $('lapBest').textContent = 'best ' + (best!=null ? fmtLap(best) : '—');
+  if(!lapLog.length){ $('lapBody').innerHTML = '<p class="note">No laps yet — they appear here as the car completes them.</p>'; return; }
+  const rows = lapLog.slice().reverse().map(r=>{
+    const purple = (r.lap_s!=null && r.lap_s===best) ? ' class="best"' : '';
+    return `<tr><td>${r.lap}</td><td${purple}>${r.lap_s!=null?fmtLap(r.lap_s):'—'}</td>`+
+      `<td>${r.driver}</td><td>${r.fuel!=null?r.fuel.toFixed(1)+'L':'—'}</td>`+
+      `<td>${r.tire_laps!=null?r.tire_laps:'—'}</td><td>${r.pos!=null?'P'+r.pos:'—'}</td><td>${r.wx}</td></tr>`;
+  }).join('');
+  $('lapBody').innerHTML = `<table class="laptbl"><thead><tr><th>Lap</th><th>Time</th><th>Driver</th>`+
+    `<th>Fuel</th><th>Set lap</th><th>Pos</th><th>Wx</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+function exportLapCsv(){
+  const head = ['lap','lap_s','driver','fuel_L','laps_on_set','position','weather','timestamp'];
+  const lines = [head.join(',')].concat(lapLog.map(r=>[
+    r.lap, r.lap_s!=null?r.lap_s:'', r.driver, r.fuel!=null?r.fuel:'', r.tire_laps!=null?r.tire_laps:'',
+    r.pos!=null?r.pos:'', r.wx, r.ts
+  ].join(',')));
+  const blob = new Blob([lines.join('\n')], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'arentim_laplog_'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.csv';
+  a.click(); URL.revokeObjectURL(a.href);
+}
+function openLaps(){ renderLapLog(); $('lapModal').classList.add('open'); }
+function closeLaps(){ $('lapModal').classList.remove('open'); }
+
 // ---- live sync: receive telemetry/sim state and re-render ----
 const LIVE_FIELDS = ['fuel_now','laps_done','stint_lap','avg_lap_live','elapsed_s',
   'current_driver','last_lap_s','best_lap_s','position','gap_ahead_s','gap_behind_s',
-  'penalties','aero_pct','body_pct','susp_pct','tyres_pct','repair_s','tire_wear_pct','laps_on_tires'];
+  'weather_now','penalties','aero_pct','body_pct','susp_pct','tyres_pct','repair_s','tire_wear_pct','laps_on_tires'];
+let _syncInit = true;
 PitDB.onState(s => {
   LIVE_FIELDS.forEach(k => { if(s[k] !== undefined) state[k] = s[k]; });
   if(Array.isArray(s.wheels)) state.wheels = s.wheels;
+  if(_syncInit){
+    // first snapshot = just seed the baseline, don't synthesize a lap history
+    _lastLoggedLap = state.laps_done; _syncInit = false;
+  } else if(state.laps_done > _lastLoggedLap){
+    // one honest row for the lap just completed; if laps were skipped between
+    // updates we don't fabricate the missing ones (their per-lap data is unknown)
+    captureLap(state.laps_done);
+    _lastLoggedLap = state.laps_done;
+  }
   render();
 });
 

@@ -142,6 +142,14 @@ tr.active{background:rgba(225,6,0,.08)} tr.active td:first-child{border-left:2px
 .modal{background:linear-gradient(180deg,var(--panel),var(--panel2));
   border:1px solid var(--line2);border-radius:14px;width:min(520px,92vw);
   max-height:92dvh;overflow:auto;padding:22px;position:relative}
+.modal.wide{width:min(760px,94vw)}
+.laptbl{width:100%;border-collapse:collapse;margin-top:12px;font-family:var(--mono);font-size:13px}
+.laptbl th{text-align:left;color:var(--mut);font-weight:600;font-size:11px;text-transform:uppercase;
+  letter-spacing:1px;padding:6px 8px;border-bottom:1px solid var(--line2);position:sticky;top:0;background:var(--panel)}
+.laptbl td{padding:6px 8px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+.laptbl tbody tr:hover{background:#0d131b}
+.laptbl td.best{color:#b06cff;font-weight:700}
+#lapBody{max-height:56dvh;overflow:auto;margin-top:4px}
 .modal .x{position:absolute;top:12px;right:14px;cursor:pointer;color:var(--mut);
   font-size:18px;background:none;border:0;padding:4px 8px}
 .modal .x:hover{color:var(--txt)}
