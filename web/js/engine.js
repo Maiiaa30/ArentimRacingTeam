@@ -152,14 +152,38 @@ const Engine = (() => {
     const cond = conditionAt(weather, state.elapsed_s);
     const fpl = lapFuelAt(cfg, cond);
     const fuelLapsLeft = state.fuel_now / fpl;
-    const pitInLaps = Math.max(0, Math.floor(fuelLapsLeft - cfg.fuel_margin_laps));
+
+    // VE governance (LMGT3 / Hypercar): these cars run to a Virtual Energy
+    // allowance, not the tank. When the game feeds live VE% the stint ends at
+    // VE=0 (~24 laps at Monza), long before the 120 L tank is dry — so the pit
+    // window is the MORE RESTRICTIVE of fuel and VE. Without live VE we fall back
+    // to fuel only (or the plan's max_stint_laps cap, applied below).
+    let energyLapsLeft = null;
+    if (cfg.energy_mode === "ve" && state.virtual_energy != null && cfg.ve_per_lap > 0) {
+      energyLapsLeft = (state.virtual_energy * 100) / cfg.ve_per_lap;  // fraction -> %
+    }
+    // if no live VE but the plan caps the stint (VE window), respect that cap too
+    let capLapsLeft = null;
+    if (energyLapsLeft == null && cfg.max_stint_laps && state.laps_on_tires != null) {
+      capLapsLeft = cfg.max_stint_laps - state.laps_on_tires;
+    }
+    const bindingLapsLeft = Math.min(
+      fuelLapsLeft,
+      energyLapsLeft != null ? energyLapsLeft : Infinity,
+      capLapsLeft != null ? capLapsLeft : Infinity
+    );
+    const pitInLaps = Math.max(0, Math.floor(bindingLapsLeft - cfg.fuel_margin_laps));
+    const veLimited = energyLapsLeft != null && energyLapsLeft < fuelLapsLeft;
+
     const lapsLeft = plan.total_laps - state.laps_done;
     const remStops = state.remaining_stops != null ? state.remaining_stops : Math.max(0, plan.stops);
     const fuelNeeded = lapsLeft * fpl;
     const fuelAvail = state.fuel_now + remStops * cfg.tank_cap;
     return {
       fuel_laps_left: +fuelLapsLeft.toFixed(1),
+      energy_laps_left: energyLapsLeft != null ? +energyLapsLeft.toFixed(1) : null,
       pit_in_laps: pitInLaps,
+      ve_limited: veLimited,            // true = VE forces the stop before fuel does
       laps_left: lapsLeft,
       make_finish: fuelAvail >= fuelNeeded,
       fuel_deficit: +(fuelNeeded - fuelAvail).toFixed(1), // >0 = short

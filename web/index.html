@@ -443,6 +443,10 @@ function render(){
   $('fuelLaps').textContent = m.fuel_laps_left;
   $('pitIn').textContent = m.pit_in_laps;
   $('pitTile').className = 'panel stat'+(m.pit_in_laps<=1?' crit':m.pit_in_laps<=3?' hot':'');
+  // say WHY the window is where it is: VE forces the stop before fuel on LMGT3
+  $('pitSub').innerHTML = m.ve_limited
+    ? 'VE-limited'+(m.energy_laps_left!=null?' · '+m.energy_laps_left+' laps VE':'')
+    : (m.energy_laps_left!=null ? m.energy_laps_left+' laps VE' : '&nbsp;');
   const stintLap = Math.max(0, state.laps_done - (active?active.in_lap:0));
   $('stint').textContent = stintLap; $('stintSub').textContent = 'target '+(active?.target_laps??'—');
   const realFpl = measuredFuelPerLap();
