@@ -59,6 +59,7 @@
     <!-- plan -->
     <div class="panel strat">
       <h2>Race strategy</h2>
+      <p class="note" style="margin:-4px 0 8px">The full stop-by-stop plan for the rest of the race — who drives, which lap to box, tyres & fuel each stint. Re-anchors after each real pit stop or weather change, not every lap.</p>
       <div class="plan-stats" id="planStats"></div>
       <div class="tbl-scroll cscroll">
         <table>
@@ -1333,7 +1334,7 @@ const LIVE_FIELDS = ['fuel_now','fuel_capacity','virtual_energy','state_of_charg
   'flag','in_pits','session_remaining_s','track_temp','air_temp','lap_delta_s','cls_position'];
 let _syncInit = true, _lastFeed = null, _pitActive = false;
 let _stintStartLap = null, _stintStartEl = null;   // for derived stint/tyre context
-let _lastRegenLap = -1, _lastRegenWx = null;
+let _lastRegenWx = null;
 
 // ---- real stint log + per-driver/per-stint incident tracking ----
 // Captures what actually happened each stint (driver, laps, best lap, tyre life
@@ -1454,6 +1455,9 @@ PitDB.onState(s => {
       state.last_pit_lap = state.laps_done;
       _stintStartLap = state.laps_done;
       _stintStartEl = state.elapsed_s;
+      // a stop just completed → re-anchor the rest of the plan from here (once,
+      // not every lap), so stint boundaries track the real stops we actually made
+      if(state.fuel_now!=null){ try { regen(); } catch(e){} }
     }
   }
   if(!_pitActive) accumStint();      // grow the in-progress stint (laps/best/incidents)
@@ -1473,13 +1477,18 @@ PitDB.onState(s => {
     captureLap(state.laps_done);
     _lastLoggedLap = state.laps_done;
   }
-  // live strategy: rebuild the remaining plan from real state when the race moves
-  // on (new lap) or the weather flips, so pit windows + stint targets track reality.
+  // live strategy: re-anchor the remaining plan ONLY when the race actually
+  // changes gear — a weather flip (pit-exit re-anchors in its own branch above).
+  // Re-planning every lap just re-dated the same strategy: the next stint's start
+  // lap chased the current lap, so the whole table reshuffled each lap with no
+  // real change ("keeps adding a new line"). The live pit window + VE already
+  // track reality lap-by-lap via liveMetrics, so the plan only needs rebuilding
+  // when a stop completes or the weather turns.
   if(state.fuel_now!=null){
     const wxNowS = state.weather_now || null;
-    if(state.laps_done !== _lastRegenLap || wxNowS !== _lastRegenWx){
+    if(wxNowS !== _lastRegenWx){
       try { regen(); } catch(e){}
-      _lastRegenLap = state.laps_done; _lastRegenWx = wxNowS;
+      _lastRegenWx = wxNowS;
     }
   }
   render();
