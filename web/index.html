@@ -21,6 +21,7 @@
 <div class="wrap">
   <div id="feedBanner" class="feedbanner" onclick="document.getElementById('conn').scrollIntoView()"></div>
   <div id="boxAlert" class="box-alert">📻 BOX THIS LAP — swap to <span id="boxNext"></span></div>
+  <div id="pitBanner" class="pit-banner"></div>
   <!-- balanced hero grid: 3 stats -->
   <div class="grid big3">
     <div class="panel stat"><div class="label">Fuel laps left</div><div class="val" id="fuelLaps">—</div><div class="sub" id="fuelSub">&nbsp;</div></div>
@@ -262,7 +263,7 @@ let state = { fuel_now:null, fuel_capacity:null, laps_done:0, stint_lap:0, avg_l
   // damage: derived from real LMU signals on the bridge; null where unmeasurable
   aero_pct:null, body_pct:null, susp_pct:null, tyres_pct:null, repair_s:null,
   parts_detached:false, wheels:[],
-  last_impact_mag:null, last_impact_ago_s:null, accum_impact:null };
+  last_impact_mag:null, last_impact_ago_s:null, accum_impact:null, track_limits:null };
 
 // live plan — events regenerate it; render reads it
 let currentPlan = Engine.generatePlan(cfg, wx);
@@ -276,6 +277,7 @@ const DEFAULT_PLAN = JSON.parse(JSON.stringify(Engine.generatePlan(DEFAULT_CFG,
 
 const $=id=>document.getElementById(id);
 const hms=s=>{s=Math.max(0,s|0);return `${(s/3600|0)}:${String(s/60%60|0).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`};
+const fmtClock=s=>{s=Math.max(0,s|0);return `${(s/60|0)}:${String(s%60).padStart(2,'0')}`};  // M:SS
 const fmtLap=s=>{ if(s==null)return '—'; return s>=60?`${(s/60|0)}:${(s%60).toFixed(3).padStart(6,'0')}`:s.toFixed(3)+'s'; };
 
 // measured average lap from the real lap log (recent clean laps). null if none yet.
@@ -500,10 +502,24 @@ function render(){
       sl.className = 'v' + (left<120 ? ' warn' : '');
     }
   }
-  const boxOn = m.pit_in_laps <= 2;
+  const boxOn = m.pit_in_laps <= 2 && !state.in_pits;
   $('boxAlert').classList.toggle('on', boxOn);
   $('boxNext').textContent = nextStint ? nextStint.driver : 'same driver';
   window._boxState = boxOn;   // visual BOX banner only — no sound
+
+  // IN-PIT banner with a live stop timer (elapsed since pit entry)
+  const pb = $('pitBanner');
+  if(pb){
+    if(state.in_pits){
+      const t = (_pitStartEl!=null && state.elapsed_s!=null) ? Math.max(0, state.elapsed_s - _pitStartEl) : 0;
+      const stops = stintLog.length + 1;
+      pb.className = 'pit-banner on';
+      pb.innerHTML = '🅿 IN PITS — <b>'+fmtClock(t)+'</b> · stop '+stops
+        + (_pendStint && _pendStint.tyreLifeEnd!=null ? ' · tyres were '+_pendStint.tyreLifeEnd+'%' : '');
+    } else {
+      pb.className = 'pit-banner';
+    }
+  }
 
   // NEXT STOP card — consolidated call for whoever's on the wall
   const nsEl = $('nextStop');
@@ -640,6 +656,7 @@ function render(){
   renderWxStrip();
   runBrain();
   if($('dmgModal').classList.contains('open')) renderDamage();
+  if($('drvModal').classList.contains('open')) renderDrivers();
 }
 
 function renderWxStrip(){
@@ -1109,8 +1126,49 @@ function renderDrivers(){
     return `<tr><td>${d}</td><td>${v.stints}</td><td>${v.laps}</td><td>${hms(v.time)}</td>`+
       `<td><div class="loadbar"><i style="width:${share}%"></i></div><span class="ls">${share}%</span></td></tr>`;
   }).join('');
-  $('drvBody').innerHTML = `<table class="laptbl"><thead><tr><th>Driver</th><th>Stints</th>`+
-    `<th>Laps</th><th>Time</th><th>Share</th></tr></thead><tbody>${rows}</tbody></table>`;
+  // ---- ACTUAL per-driver totals from the real stint log (incidents etc) ----
+  const act = {};
+  const allStints = stintLog.concat(_curStint ? [_curStint] : []);
+  allStints.forEach(s=>{
+    const d=s.driver||'—'; act[d]=act[d]||{laps:0,contacts:0,offtracks:0,best:null,stints:0};
+    act[d].laps += (s.laps||0); act[d].contacts += (s.contacts||0);
+    act[d].offtracks += (s.offtracks||0); act[d].stints++;
+    if(s.bestLap!=null) act[d].best = act[d].best==null ? s.bestLap : Math.min(act[d].best, s.bestLap);
+  });
+  const actNames = Object.keys(act);
+  let actBlock = '';
+  if(actNames.length){
+    const arows = actNames.map(d=>{
+      const v=act[d];
+      return `<tr><td>${d}</td><td>${v.stints}</td><td>${v.laps}</td>`+
+        `<td>${v.best!=null?fmtLap(v.best):'—'}</td>`+
+        `<td class="${v.contacts>0?'bad':''}">${v.contacts}</td>`+
+        `<td class="${v.offtracks>0?'warn':''}">${v.offtracks}</td></tr>`;
+    }).join('');
+    actBlock = `<h3 class="sub-h">Actual — this session</h3>`+
+      `<table class="laptbl"><thead><tr><th>Driver</th><th>Stints</th><th>Laps</th>`+
+      `<th>Best lap</th><th>Contacts</th><th>Off-track</th></tr></thead><tbody>${arows}</tbody></table>`;
+    // per-stint detail
+    if(allStints.length){
+      const srows = allStints.map((s,i)=>{
+        const done = !(_curStint && i===allStints.length-1);
+        return `<tr><td>${i+1}${done?'':' <span class="dim">(live)</span>'}</td><td>${s.driver||'—'}</td>`+
+          `<td>${s.laps||0}</td><td>${s.bestLap!=null?fmtLap(s.bestLap):'—'}</td>`+
+          `<td>${s.tyreLifeEnd!=null?s.tyreLifeEnd+'%':'—'}</td>`+
+          `<td class="${s.contacts>0?'bad':''}">${s.contacts||0}</td>`+
+          `<td class="${s.offtracks>0?'warn':''}">${s.offtracks||0}</td>`+
+          `<td>${s.pit_s!=null?fmtClock(s.pit_s):(done?'—':'')}</td></tr>`;
+      }).join('');
+      actBlock += `<h3 class="sub-h">Stint-by-stint</h3>`+
+        `<table class="laptbl"><thead><tr><th>#</th><th>Driver</th><th>Laps</th>`+
+        `<th>Best</th><th>Tyre life end</th><th>Contacts</th><th>Off-track</th><th>Pit</th>`+
+        `</tr></thead><tbody>${srows}</tbody></table>`;
+    }
+  }
+  $('drvBody').innerHTML = `<h3 class="sub-h">Planned load</h3>`+
+    `<table class="laptbl"><thead><tr><th>Driver</th><th>Stints</th>`+
+    `<th>Laps</th><th>Time</th><th>Share</th></tr></thead><tbody>${rows}</tbody></table>`+
+    actBlock;
 }
 function openDrivers(){ renderDrivers(); $('drvModal').classList.add('open'); }
 function closeDrivers(){ $('drvModal').classList.remove('open'); }
@@ -1271,11 +1329,69 @@ function closeDefaultStrat(){ $('defModal').classList.remove('open'); }
 const LIVE_FIELDS = ['fuel_now','fuel_capacity','virtual_energy','state_of_charge','laps_done','stint_lap','avg_lap_live','elapsed_s',
   'current_driver','last_lap_s','best_lap_s','position','gap_ahead_s','gap_behind_s',
   'weather_now','penalties','scheduled_stops','aero_pct','body_pct','susp_pct','tyres_pct','repair_s',
-  'parts_detached','last_impact_mag','last_impact_ago_s','tire_wear_pct',
+  'parts_detached','last_impact_mag','last_impact_ago_s','tire_wear_pct','track_limits',
   'flag','in_pits','session_remaining_s','track_temp','air_temp','lap_delta_s','cls_position'];
 let _syncInit = true, _lastFeed = null, _pitActive = false;
 let _stintStartLap = null, _stintStartEl = null;   // for derived stint/tyre context
 let _lastRegenLap = -1, _lastRegenWx = null;
+
+// ---- real stint log + per-driver/per-stint incident tracking ----
+// Captures what actually happened each stint (driver, laps, best lap, tyre life
+// at the end, contacts + off-tracks) so drivers can compare afterwards. Built
+// live from the feed; a stint closes when the car pits.
+const STINT_KEY = 'arentim_pitwall_stints';
+let stintLog = [];
+try { const s=JSON.parse(localStorage.getItem(STINT_KEY)||'[]'); if(Array.isArray(s)) stintLog=s; } catch(e){}
+function saveStints(){ try{ localStorage.setItem(STINT_KEY, JSON.stringify(stintLog)); }catch(e){} }
+let _curStint = null;       // accumulator for the stint in progress
+let _pendStint = null;      // finalized stint awaiting its pit time
+let _pitStartEl = null;     // elapsed_s at pit entry (pit-timer + pit duration)
+let _lastImpactAgo = null;  // edge-detect new contacts (ago resets to ~0 on impact)
+
+function _worstTyreLife(){
+  if(!state.wheels || !state.wheels.length) return null;
+  const worn = Math.max(0, ...state.wheels.map(w=>w.wear||0));
+  return Math.round(100 - worn*100);
+}
+function startStint(){
+  _curStint = { driver: state.current_driver||'—', startLap: state.laps_done||0,
+    startEl: state.elapsed_s||0, bestLap: null, laps: 0,
+    contacts: 0, offtracks: 0, tlBase: (state.track_limits!=null?state.track_limits:null) };
+  _lastImpactAgo = state.last_impact_ago_s;
+}
+function accumStint(){
+  if(!_curStint) startStint();
+  // best lap this stint
+  if(state.last_lap_s!=null && state.last_lap_s>0)
+    _curStint.bestLap = _curStint.bestLap==null ? state.last_lap_s : Math.min(_curStint.bestLap, state.last_lap_s);
+  _curStint.laps = Math.max(0, (state.laps_done||0) - _curStint.startLap);
+  // contact: last_impact_ago_s jumps DOWN (new impact) with real magnitude
+  const ago = state.last_impact_ago_s, mag = state.last_impact_mag;
+  if(ago!=null && mag && mag>0.2){
+    if(_lastImpactAgo==null ? ago<3 : ago < _lastImpactAgo-0.4) _curStint.contacts++;
+  }
+  _lastImpactAgo = ago;
+  // off-track: cumulative track_limits steps delta since stint start
+  if(state.track_limits!=null){
+    if(_curStint.tlBase==null) _curStint.tlBase = state.track_limits;
+    _curStint.offtracks = Math.max(0, state.track_limits - _curStint.tlBase);
+  }
+}
+function closeStint(){            // on pit ENTRY: freeze the stint stats
+  if(!_curStint) return;
+  accumStint();
+  _pendStint = Object.assign({}, _curStint, {
+    endLap: state.laps_done||0, tyreLifeEnd: _worstTyreLife(),
+    durEl: Math.max(0,(state.elapsed_s||0)-_curStint.startEl) });
+  _curStint = null;
+}
+function commitStintWithPit(){   // on pit EXIT: attach pit time, store, start fresh
+  if(_pendStint){
+    _pendStint.pit_s = (_pitStartEl!=null) ? Math.max(0,(state.elapsed_s||0)-_pitStartEl) : null;
+    stintLog.push(_pendStint); saveStints(); _pendStint=null;
+  }
+  startStint();
+}
 // Feed health tiers (seconds since last update). At ~112s/lap the bridge pushes
 // many times a lap, so a quiet feed means trouble, not a slow car.
 const FEED_LIVE = 8, FEED_LOST = 25;
@@ -1326,15 +1442,21 @@ PitDB.onState(s => {
   if(s.sectors && typeof s.sectors === 'object') state.sectors = s.sectors;
   // pit auto-detect: in_pits false->true = entry, true->false = exit
   if(s.in_pits !== undefined){
-    if(s.in_pits && !_pitActive){ _pitActive = true; logEvent('Pit entry (lap '+state.laps_done+')'); }
+    if(s.in_pits && !_pitActive){
+      _pitActive = true; _pitStartEl = state.elapsed_s;
+      closeStint();                 // freeze the stint we just finished
+      logEvent('Pit entry (lap '+state.laps_done+')');
+    }
     else if(!s.in_pits && _pitActive){
       _pitActive = false; logEvent('Pit exit — rolling');
+      commitStintWithPit();         // attach pit time, store, open the new stint
       // new stint begins: reset the derived tyre/stint baseline
       state.last_pit_lap = state.laps_done;
       _stintStartLap = state.laps_done;
       _stintStartEl = state.elapsed_s;
     }
   }
+  if(!_pitActive) accumStint();      // grow the in-progress stint (laps/best/incidents)
   // seed the stint baseline on the very first feed (race already running)
   if(_stintStartLap==null){ _stintStartLap = state.laps_done||0; _stintStartEl = state.elapsed_s||0; }
   // derived (game doesn't expose these): laps on current tyres + time on this stint

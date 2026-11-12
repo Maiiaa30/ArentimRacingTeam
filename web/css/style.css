@@ -107,6 +107,17 @@ header::before{content:"";position:absolute;left:0;top:0;right:0;height:2px;
   font-family:var(--mono);font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
   padding:10px;border-radius:10px;animation:boxpulse 1s infinite}
 .box-alert.on{display:flex}
+.pit-banner{display:none;align-items:center;justify-content:center;gap:8px;
+  background:rgba(78,161,255,.14);border:1px solid #4ea1ff;color:#8fc4ff;
+  font-family:var(--mono);font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
+  padding:9px;border-radius:10px}
+.pit-banner.on{display:flex}
+.pit-banner b{color:#fff}
+.sub-h{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--mut);
+  margin:16px 0 6px;font-weight:700}
+.sub-h:first-child{margin-top:0}
+.laptbl td.bad{color:var(--bad);font-weight:700}
+.laptbl td.warn{color:var(--warn);font-weight:700}
 .box-alert #boxNext{color:#fff}
 @keyframes boxpulse{50%{background:rgba(255,59,48,.30)}}
 

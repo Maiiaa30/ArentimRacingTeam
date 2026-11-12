@@ -360,6 +360,9 @@ def read_state(info):
         "parts_detached": parts_off,
         "last_impact_mag": last_impact_mag,
         "last_impact_ago_s": last_impact_ago_s,
+        # cumulative track-limits steps (off-track counter) — dashboard counts the
+        # increments per stint/driver. Rises each time the car exceeds track limits.
+        "track_limits": g(tele, "mTrackLimitsSteps"),
         # fields LMU doesn't feed -> null so the dashboard blanks them (never fake):
         "avg_lap_live": None,                        # derived on dashboard from lap history
         "stint_time_s": None,
