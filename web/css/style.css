@@ -113,6 +113,21 @@ header::before{content:"";position:absolute;left:0;top:0;right:0;height:2px;
   padding:9px;border-radius:10px}
 .pit-banner.on{display:flex}
 .pit-banner b{color:#fff}
+/* FCY / Safety-Car cheap-stop prompt — amber, pulses like the BOX alert */
+.fcy-banner{display:none;align-items:center;justify-content:center;gap:8px;
+  background:rgba(242,182,0,.15);border:1px solid var(--warn);color:#ffd451;
+  font-family:var(--mono);font-weight:700;letter-spacing:1.2px;text-transform:uppercase;
+  padding:10px;border-radius:10px;animation:boxpulse 1.1s infinite}
+.fcy-banner.on{display:flex}
+.fcy-banner b{color:#fff}
+/* Engineer SAVE/PUSH/ON-TARGET call inside the next-stop card */
+.ns-call{font-family:var(--mono);font-size:12px;margin-top:5px;letter-spacing:.3px;
+  padding:4px 7px;border-radius:7px;border:1px solid transparent}
+.ns-call b{font-weight:800;letter-spacing:.6px}
+.ns-call .nc-u{opacity:.7;font-size:10px}
+.ns-call.ok{color:#7ff0a8;background:rgba(46,201,107,.1);border-color:rgba(46,201,107,.32)}
+.ns-call.warn{color:#ffd451;background:rgba(242,182,0,.1);border-color:rgba(242,182,0,.32)}
+.ns-call.bad{color:#ff8a82;background:rgba(255,59,48,.12);border-color:rgba(255,59,48,.38)}
 .sub-h{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--mut);
   margin:16px 0 6px;font-weight:700}
 .sub-h:first-child{margin-top:0}
@@ -176,6 +191,7 @@ body.feed-lost .big3 .stat{border-color:rgba(255,59,48,.25)}
 .kv:last-child{border-bottom:0}
 .kv .k{color:var(--mut);font-size:12px;letter-spacing:1px;text-transform:uppercase}
 .kv .v{font-family:var(--mono);font-weight:700;font-variant-numeric:tabular-nums;font-size:16px}
+.kv .v.ok{color:var(--ok)} .kv .v.warn{color:var(--warn)} .kv .v.bad{color:var(--bad)}
 .pill{font-family:var(--mono);font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;
   letter-spacing:1px}
 .pill.ok{color:var(--ok);background:rgba(46,201,107,.12);border:1px solid rgba(46,201,107,.35)}

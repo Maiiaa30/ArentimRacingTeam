@@ -21,6 +21,7 @@
 <div class="wrap">
   <div id="feedBanner" class="feedbanner" onclick="document.getElementById('conn').scrollIntoView()"></div>
   <div id="boxAlert" class="box-alert">📻 BOX THIS LAP — swap to <span id="boxNext"></span></div>
+  <div id="fcyBanner" class="fcy-banner"></div>
   <div id="pitBanner" class="pit-banner"></div>
   <!-- balanced hero grid: 3 stats -->
   <div class="grid big3">
@@ -79,6 +80,7 @@
         <div class="kv"><span class="k">On track</span><span class="v" id="driver">—</span></div>
         <div class="kv"><span class="k">Stint left</span><span class="v" id="stintLeft">—</span></div>
         <div class="kv"><span class="k">Stint time</span><span class="v" id="stintTime">—</span></div>
+        <div class="kv"><span class="k">Stint pace</span><span class="v" id="stintPace">—</span></div>
         <div class="kv"><span class="k">Laps left</span><span class="v" id="lapsLeft">—</span></div>
         <div class="kv"><span class="k">Stops left</span><span class="v" id="stops">—</span></div>
         <div class="kv"><span class="k">Avg lap</span><span class="v" id="avg">—</span></div>
@@ -318,6 +320,72 @@ function measuredVePerLap(){
   return last.reduce((x,y)=>x+y,0)/last.length;
 }
 
+// ---- Engineer call: SAVE / PUSH / ON TARGET ------------------------------
+// The single most important thing a race engineer tells the driver: are we on
+// track to reach the planned stop on the energy/fuel we have, or must we lift
+// and coast to save, or do we have margin to push? Computes, for BOTH virtual
+// energy and fuel, the per-lap rate needed to exactly reach the ideal stop lap,
+// compares it to the real measured drain, and reports the MORE BINDING of the
+// two (the one that runs out first). Pure read of live telemetry — no eyes on
+// track needed. Returns null until there's a live resource + a target lap.
+function engineerCall(m, veRate, fplMeasured){
+  const idealLap = (m && m.pit_window) ? m.pit_window.ideal : null;
+  if(idealLap==null) return null;
+  const lapsToIdeal = idealLap - (state.laps_done||0);
+  if(lapsToIdeal <= 0) return null;               // already at/past the window
+  const legs = [];
+  // Virtual Energy leg (the GT3 limiter)
+  if(cfg.energy_mode==='ve' && state.virtual_energy!=null){
+    const now = state.virtual_energy*100;         // %
+    const drain = (veRate && veRate>0) ? veRate : cfg.ve_per_lap;
+    if(drain>0){
+      const need = now/lapsToIdeal;               // %/lap to just reach ideal
+      legs.push({ unit:'VE', uu:'%', margin: now/drain - lapsToIdeal, save: drain-need });
+    }
+  }
+  // Fuel leg
+  if(state.fuel_now!=null){
+    const fpl = (fplMeasured && fplMeasured>0) ? fplMeasured : cfg.fuel_per_lap;
+    if(fpl>0){
+      const need = state.fuel_now/lapsToIdeal;     // L/lap to just reach ideal
+      legs.push({ unit:'Fuel', uu:'L', margin: state.fuel_now/fpl - lapsToIdeal, save: fpl-need });
+    }
+  }
+  if(!legs.length) return null;
+  const b = legs.reduce((a,c)=> c.margin < a.margin ? c : a);   // least margin = binding
+  let verb, detail, cls;
+  if(b.margin <= -0.3){                            // short — must lift & coast
+    verb='SAVE'; cls='bad';
+    detail = 'lift & coast ~'+Math.abs(b.save).toFixed(b.unit==='VE'?2:2)+b.uu+'/lap';
+  } else if(b.margin >= 0.6){                       // margin in hand — can push
+    verb='PUSH'; cls='ok';
+    detail = '+'+b.margin.toFixed(1)+' lap'+(b.margin>=1.95?'s':'')+' in hand';
+  } else {                                          // right on the number
+    verb='ON TARGET'; cls='warn';
+    detail = '±'+Math.abs(b.margin).toFixed(1)+' lap';
+  }
+  return { verb, detail, cls, unit:b.unit };
+}
+
+// ---- Stint pace trend: are the tyres going off? --------------------------
+// With no eyes on track, deg shows up as lap time climbing through the stint.
+// Compares the recent clean-lap average to the stint's best; a positive delta
+// means the car is dropping off (deg / fuel-save / traffic). Uses only this
+// stint's laps for the current driver. Needs a few clean laps first.
+function stintPaceTrend(){
+  if(!Array.isArray(lapLog) || !lapLog.length) return null;
+  const since = (_stintStartLap!=null) ? _stintStartLap : 0;
+  const laps = lapLog.filter(r=> r.lap_s!=null && r.lap_s>0 && r.lap > since).map(r=>r.lap_s);
+  if(laps.length < 4) return null;                 // not enough to call a trend
+  const best = Math.min(...laps);
+  const clean = laps.filter(v=> v <= best*1.07);   // drop in/out-laps, offs
+  if(clean.length < 3) return null;
+  const recent = clean.slice(-3);
+  const recentAvg = recent.reduce((a,b)=>a+b,0)/recent.length;
+  const trend = recentAvg - best;                  // s/lap off the stint best
+  return { trend, n: laps.length, recentAvg, best };
+}
+
 // standings / sectors modal
 // class metadata — reusable across races (LMU: Hypercar + LMGT3; add more here)
 const CLASS_META = {
@@ -522,6 +590,36 @@ function render(){
     }
   }
 
+  // STINT PACE trend — deg read-out (lap time climbing = tyres going off)
+  const sp = $('stintPace');
+  if(sp){
+    const tr = stintPaceTrend();
+    if(!tr){ sp.textContent='—'; sp.className='v'; }
+    else {
+      const d = tr.trend;
+      const tag = d < 0.25 ? ['steady','ok'] : d < 0.7 ? ['+'+d.toFixed(2)+'s easing','warn']
+                 : ['+'+d.toFixed(2)+'s dropping','bad'];
+      sp.textContent = tag[0]; sp.className = 'v '+tag[1];
+    }
+  }
+
+  // FCY / SC OPPORTUNITY — pitting under a slow-zone loses far less time (the
+  // whole field is slowed), so if a stop is near, take it now. Pure flag read.
+  const fcy = $('fcyBanner');
+  if(fcy){
+    const fl = (state.flag||'green').toLowerCase();
+    const slow = fl==='fcy' || fl==='yellow' || fl==='sc' || fl==='safety';
+    const nearStop = m.pit_in_laps <= 6;
+    if(slow && nearStop && !state.in_pits){
+      const saved = Math.round((cfg.pit_loss_s||60) * 0.45);  // ~rough time clawed back
+      const label = fl==='fcy' ? 'FULL-COURSE YELLOW' : fl==='sc'||fl==='safety' ? 'SAFETY CAR' : 'YELLOW';
+      fcy.className = 'fcy-banner on';
+      fcy.innerHTML = '⚑ '+label+' — <b>CHEAP STOP, BOX NOW</b> · ~'+saved+'s clawed back · stop was due in '+m.pit_in_laps+' lap'+(m.pit_in_laps===1?'':'s');
+    } else {
+      fcy.className = 'fcy-banner';
+    }
+  }
+
   // NEXT STOP card — consolidated call for whoever's on the wall
   const nsEl = $('nextStop');
   if(nsEl){
@@ -553,11 +651,19 @@ function render(){
           + ' · ideal <b>L'+w.ideal+'</b>'
           + (m.ve_limited?' · VE':'') + '</div>';
       }
+      // ENGINEER CALL: save / push / on-target to reach the ideal stop lap on
+      // the energy (or fuel) we actually have — the core radio call.
+      let callLine = '';
+      const call = engineerCall(m, veRate, realFpl);
+      if(call && !boxOn){
+        callLine = '<div class="ns-call '+call.cls+'"><b>'+call.verb+'</b> '
+          + '<span class="nc-u">'+call.unit+'</span> · '+call.detail+'</div>';
+      }
       nsEl.className = 'nextstop' + (boxOn ? ' due' : '');
       nsEl.innerHTML =
         '<div class="ns-head">NEXT STOP <span class="ns-when">'+when+'</span></div>'+
         '<div class="ns-main">+'+fuelAdd+'L · '+tyre+' · '+swap+'</div>'+
-        winLine;
+        winLine + callLine;
     }
   }
   // race info strip
