@@ -68,6 +68,9 @@ All current numbers are **baselines**; the live bridge reads real telemetry and
 the plan self-corrects. Before the race, do one **10+ lap** practice run and read
 off the in-game **MFD fuel page**:
 1. **Fuel (L/lap)** and **VE (%/lap)** → sets true stint length (the ~24 anchor).
+   The board now **measures both live** from the lap stream and shows them in the
+   fuel tile (`VE 51% (4.5%/lap)`), so you can read the real VE drain off the
+   dashboard without the MFD and confirm it's near the 4.2 %/lap assumption.
 2. **Lap time** race pace (we assumed 1:52 / 112s).
 3. **Pit loss** (pit-lane delta + full service) — we assumed 60s.
 4. **Tyre drop-off** over a long run — watch outer-rear. If it falls off before
@@ -81,7 +84,11 @@ Set the real values in the dashboard **Setup** panel; the live plan updates. The
 
 ## How this maps to the config
 `web/js/config.js`:
-- `max_stint_laps: 24` — the VE pit window (the real stint limiter).
+- `max_stint_laps: 24` — the VE pit window (the real stint limiter). The live
+  "Pit in" count is the more-restrictive of fuel and VE, driven by the measured
+  VE %/lap when the game feeds live VE — so it tracks the real car, not the tank.
+- `ve_per_lap: 4.2` — VE drain assumption (%/lap); the board overrides it with the
+  live measured rate once a couple of laps are logged.
 - `driver_sequence` — the block rotation above (each driver listed twice in a row).
 - `avg_lap_s 112`, `fuel_per_lap 2.8`, `tank_cap 120`, `pit_loss_s 60` — Monza
   BMW M4 baselines.

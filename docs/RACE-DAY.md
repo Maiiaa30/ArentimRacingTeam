@@ -41,10 +41,38 @@ that, fix network/keys before trusting the live run.
 
 ---
 
+## Validating the telemetry read (practice stint)
+
+Do this once before race day — a single ~1h practice stint with the bridge
+running (`--print --supabase`). The pipeline is already proven (demo test); this
+confirms the game's **values** map right. Watch for:
+
+- [ ] Header chip goes **● live · cloud** when you're on track.
+- [ ] **Fuel (L), VE%, laps, lap times** populate and move. Anything stuck `null`
+      the game doesn't expose → it's entered manually in Setup / the sim feeder.
+- [ ] **Measured VE %/lap** (fuel-tile subtext, e.g. `VE 51% (4.5%/lap)`) settles
+      near **4.2**. If it's well off, note the number — the window self-corrects,
+      but `ve_per_lap` in `config.js` should be updated to the real figure.
+- [ ] **Pit-in** counts down toward the **VE** stop (~24), not the fuel number
+      (~40). When VE binds the tile says *VE-limited*.
+- [ ] **Tyre wear%** on the grid **rises** as the stint goes (not stuck/inverted).
+- [ ] **Pit** when you box: the board auto-logs entry/exit and resets the stint.
+
+Paste the `--print` output back if anything looks wrong — the mapping gets tuned
+to match. Field *names* are already validated against the struct, so this is a
+value/units check, not a debug-from-scratch.
+
+---
+
 ## Reading the board
 
-- **Hero row:** Fuel laps left · Pit-in (laps) · Stint lap. Pit-in is the number
-  that matters — it counts down to the VE/fuel stop.
+- **Hero row:** Fuel laps left · Pit-in (laps) · Stint lap. **Pit-in is the number
+  that matters** — it counts down to the stop, and for our LMGT3 it tracks
+  **Virtual Energy**, not fuel (the tank lasts ~40 laps, VE forces the stop at
+  ~24). When VE is the limiter the tile reads **"VE-limited · N laps VE"**.
+- **Fuel tile subtext** shows live measured rates: `80.0 L · 2.8 L/lap · VE 51%
+  (4.5%/lap)`. The **%/lap** is the real VE drain — confirm it sits near **4.2**;
+  if it's well off, the pit window still self-corrects (it uses the measured rate).
 - **Strategy Brain** (Status panel): the recommendation engine. See below.
 - **Next-stop card:** what the upcoming stop is — fuel to add, tyres new/keep,
   driver swap or stays in.
