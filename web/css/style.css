@@ -301,6 +301,19 @@ table.laptbl.pace{margin-bottom:18px}
   font-family:var(--sans);font-size:12px;font-weight:700;letter-spacing:.3px;
   color:#eaf3ff;background:linear-gradient(180deg,#1b63b8,#124a90);border:1px solid #2f7fd6}
 .brain-apply:hover{background:linear-gradient(180deg,#2074d0,#155aad)}
+.brain-more{margin-top:7px;padding:0;background:none;border:none;cursor:pointer;
+  font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--mut);text-transform:uppercase}
+.brain-more:hover{color:var(--txt)}
+.brain-alts{margin-top:6px;display:flex;flex-direction:column;gap:5px}
+.brain-alt{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;
+  background:#0c1118;border:1px solid var(--line)}
+.ba-txt{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1}
+.ba-label{font-family:var(--sans);font-size:12px;font-weight:700;color:var(--txt)}
+.ba-why{font-family:var(--mono);font-size:10px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ba-apply{flex:0 0 auto;padding:5px 10px;border-radius:6px;cursor:pointer;
+  font-family:var(--sans);font-size:11px;font-weight:700;color:#cfe3ff;
+  background:#122740;border:1px solid #27527f}
+.ba-apply:hover{background:#17304d}
 .ns-head{font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--mut);
   text-transform:uppercase;display:flex;align-items:center;gap:8px;margin-bottom:4px}
 .ns-when{margin-left:auto;letter-spacing:.5px;color:var(--txt);font-weight:700}

@@ -747,7 +747,7 @@ function regen(){ currentPlan = Engine.regenerate(cfg, liveWxTimeline(), curStat
 // ---- Strategy Brain: offline optimizer, surfaced as a live card ----
 // Runs every render (cheap, pure math). From the live state it scores several
 // rest-of-race plans and, if a different line beats holding, offers one-tap Apply.
-let _brain = null;
+let _brain = null, _brainOpen = false;
 function runBrain(){
   try {
     _brain = Engine.optimize(cfg, liveWxTimeline(), curState(), lockedStints(), { fuel_now: state.fuel_now });
@@ -761,26 +761,41 @@ function renderBrain(){
   const improve = b.key !== 'hold' && b.feasible;      // a better line exists
   const danger  = !b.feasible;                          // nothing clean — warn
   el.className = 'brain' + (improve?' act':'') + (danger?' warn':'');
-  const tag = danger ? '⚠ STRATEGY BRAIN' : improve ? '◆ STRATEGY BRAIN' : '◆ STRATEGY BRAIN';
+  const tag = danger ? '⚠ STRATEGY BRAIN' : '◆ STRATEGY BRAIN';
   const applyBtn = improve
     ? `<button class="brain-apply" onclick="applyBrain()">Apply · ${b.label}</button>` : '';
   const head = danger ? 'No clean plan' : improve ? b.label : 'Plan is optimal';
+  // runner-up lines (feasible, distinct from best) — collapsed by default
+  const alts = (_brain.alternatives||[]);
+  let altBlock = '';
+  if(alts.length){
+    const rows = alts.map((a,i)=>
+      `<div class="brain-alt"><div class="ba-txt"><span class="ba-label">${a.label}</span>`+
+      `<span class="ba-why">${a.reason}</span></div>`+
+      `<button class="ba-apply" onclick="applyAlt(${i})">Apply</button></div>`).join('');
+    altBlock =
+      `<button class="brain-more" onclick="_brainOpen=!_brainOpen;renderBrain()">`+
+      `${_brainOpen?'▾':'▸'} ${alts.length} other line${alts.length===1?'':'s'}</button>`+
+      (_brainOpen?`<div class="brain-alts">${rows}</div>`:'');
+  }
   el.innerHTML =
     `<div class="brain-top"><span class="brain-tag">${tag}</span></div>`+
     `<div class="brain-head">${head}</div>`+
     `<div class="brain-why">${b.reason||''}</div>`+
-    applyBtn;
+    applyBtn + altBlock;
 }
-function applyBrain(){
-  if(!_brain || !_brain.best || !_brain.best.plan) return;
-  const b = _brain.best;
-  // adopt the recommendation's config overrides so it becomes the new baseline
+function _applyCand(c){
+  if(!c || !c.plan) return;
+  // adopt the line's config overrides so it becomes the new baseline
   // (otherwise the Brain keeps re-recommending the same line every render).
-  if(b.ov) Object.assign(cfg, b.ov);
-  currentPlan = b.plan;
-  logEvent('Brain → '+b.label);
+  if(c.ov) Object.assign(cfg, c.ov);
+  currentPlan = c.plan;
+  logEvent('Brain → '+c.label);
+  _brainOpen = false;
   render();
 }
+function applyBrain(){ if(_brain) _applyCand(_brain.best); }
+function applyAlt(i){ if(_brain && _brain.alternatives) _applyCand(_brain.alternatives[i]); }
 
 const EV_KEY = 'arentim_pitwall_events';
 let eventLog = [];

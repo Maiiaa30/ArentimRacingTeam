@@ -121,12 +121,15 @@ const Engine = (() => {
     }
 
     // Fold a tiny final stint (time-based remainder, e.g. 1 lap) into the one
-    // before it — avoids a degenerate extra "stint"/stop at the flag.
+    // before it — avoids a degenerate extra "stint"/stop at the flag. But never
+    // merge past the VE window: a 23+5 merge = 28 laps = 100s stop-go penalty.
+    // If the merge would bust the cap, keep the short tail stint (a cheap splash).
     const TAIL_MIN = 6;
     if (stints.length > 1) {
       const last = stints[stints.length - 1];
-      if (last.target_laps < TAIL_MIN) {
-        const prev = stints[stints.length - 2];
+      const prev = stints[stints.length - 2];
+      const cap = cfg.max_stint_laps || Infinity;
+      if (last.target_laps < TAIL_MIN && prev.target_laps + last.target_laps <= cap) {
         prev.target_laps += last.target_laps;
         if (last.tire_action === "new") usedTires -= perChange;
         stints.pop();
@@ -209,26 +212,30 @@ const Engine = (() => {
     const veCap = cfg.max_stint_laps || 0;
     const budgetSets = Math.floor((cfg.tire_budget || 0) / tiresPerChange(cfg));
 
-    // candidate rest-of-race plans (config overrides applied to regenerate)
+    // candidate rest-of-race plans. Only levers with a REAL effect in this
+    // VE-capped model: tyre rationing (reserve sets) and pit timing (stint cap).
+    // Compound/fuel carry no pace delta here, so a "push/soft" line would only
+    // burn more tyres for nothing — deliberately left out.
     const reserve = cfg.tire_reserve_sets || 0;
+    const shortCap = veCap ? Math.max(10, veCap - 4) : 0;   // noticeably earlier stops
     const cands = [
-      { key: "hold",      label: "Hold the plan",            ov: {} },
-      { key: "savetyre",  label: "Save a tyre set (double-stint)", ov: { tire_reserve_sets: reserve + 1 } },
-      { key: "vesafe",    label: "Pit 1 lap earlier (VE safety)",  ov: veCap ? { max_stint_laps: veCap - 1 } : {} },
-      { key: "usereserve",label: "Use a reserve set now",     ov: { tire_reserve_sets: Math.max(0, reserve - 1) } },
-      { key: "fewstops",  label: "Fewer stops (run tyres longer)", ov: { tire_reserve_sets: Math.max(0, reserve - 1), max_stint_laps: veCap || 0 } },
+      { key: "hold",      label: "Hold the plan",       verb: "Keep current plan",          ov: {} },
+      { key: "savetyre",  label: "Save a tyre set",     verb: "Double-stint — ration tyres", ov: { tire_reserve_sets: reserve + 1 } },
+      { key: "minstops",  label: "Minimum stops",       verb: "Stretch tyres, fewest stops", ov: { tire_reserve_sets: Math.max(0, reserve - 1) } },
+      { key: "vesafe",    label: "Pit 1 lap earlier",   verb: "Pit early — VE safety margin", ov: veCap ? { max_stint_laps: veCap - 1 } : {} },
+      { key: "freshtyres",label: "Fresher tyres",       verb: "Shorter stints, always-fresh rubber", ov: shortCap ? { max_stint_laps: shortCap } : {} },
     ];
 
     const scored = [];
     const seen = {};
+    const atLap = currentState.laps_done || 0;
     for (const c of cands) {
       const c2 = Object.assign({}, cfg, c.ov);
       const plan = regenerate(c2, weather, currentState, lockedStints);
-      // signature to drop duplicate plans
+      // signature to drop duplicate plans (same stop laps + tyre actions)
       const sig = plan.stints.map(s => s.in_lap + s.tire_action[0]).join(",");
       if (seen[sig]) continue; seen[sig] = 1;
 
-      const atLap = currentState.laps_done || 0;
       const future = plan.stints.filter(s => s.in_lap >= atLap);
       const stopsLeft = plan.stints.filter(s => s.in_lap > atLap).length; // pit stops still to come
       const worstStint = future.reduce((m, s) => Math.max(m, s.target_laps), 0);
@@ -239,14 +246,14 @@ const Engine = (() => {
       let makeFinish = true;
       if (liveState.fuel_now != null) {
         const m = liveMetrics(cfg,
-          { fuel_now: liveState.fuel_now, laps_done: currentState.laps_done || 0,
+          { fuel_now: liveState.fuel_now, laps_done: atLap,
             elapsed_s: currentState.elapsed_s || 0, remaining_stops: plan.stops },
           plan, weather);
         makeFinish = m.make_finish;
       }
       const feasible = makeFinish && !overBudget && !veOver;
       scored.push({
-        key: c.key, label: c.label, plan, ov: c.ov,
+        key: c.key, label: c.label, verb: c.verb, plan, ov: c.ov,
         laps: plan.total_laps, stops: stopsLeft,
         tires_used: plan.tires_used, sets_used: Math.ceil(plan.tires_used / tiresPerChange(cfg)),
         feasible, veOver, overBudget, makeFinish,
@@ -263,32 +270,34 @@ const Engine = (() => {
 
     const best = scored[0];
     const hold = scored.find(s => s.key === "hold") || best;
-    best.reason = _optimReason(best, hold, { veCap, budgetSets, reserve });
-    return { best, ranked: scored, hold };
+    scored.forEach(s => { s.reason = _optimReason(s, hold); });
+    // runner-ups: feasible, meaningfully different from best, up to 2
+    const alternatives = scored.filter(s =>
+      s.key !== best.key && s.feasible &&
+      (s.stops !== best.stops || s.sets_used !== best.sets_used || s.laps !== best.laps)
+    ).slice(0, 2);
+    return { best, alternatives, ranked: scored, hold };
   }
 
-  function _optimReason(best, hold, ctx) {
-    if (!best) return "";
-    if (!best.feasible) {
-      const why = best.overBudget ? "no tyre option stays within budget"
-        : best.veOver ? "every option over-runs the energy window"
-        : "fuel can't reach the flag";
-      return "⚠ No clean fix — " + why + ". Closest line shown; expect a compromise.";
+  // one tight line: what it does + how it differs from holding + the hard facts.
+  function _optimReason(cand, hold) {
+    if (!cand) return "";
+    if (!cand.feasible) {
+      const why = cand.overBudget ? "over tyre budget"
+        : cand.veOver ? "over the energy window"
+        : "fuel short of the flag";
+      return "No clean line — closest shown (" + why + ")";
     }
-    const parts = [];
-    if (best.key === "hold") parts.push("Current plan is already optimal");
-    else {
-      const dl = best.laps - hold.laps;
-      const ds = best.sets_used - hold.sets_used;
-      if (best.key === "savetyre") parts.push("Double-stint the next set — saves a tyre set");
-      else if (best.key === "fewstops") parts.push("Run the tyres longer — one fewer stop");
-      else if (best.key === "usereserve") parts.push("Take a fresh set now");
-      else if (best.key === "vesafe") parts.push("Pit a lap earlier to stay inside the energy window");
-      if (dl > 0) parts.push("+" + dl + " lap" + (dl === 1 ? "" : "s") + " vs holding");
-      if (ds < 0) parts.push(Math.abs(ds) + " fewer tyre set" + (ds === -1 ? "" : "s"));
+    const parts = [cand.key === "hold" ? "Already optimal" : cand.verb];
+    if (cand.key !== "hold") {
+      const dl = cand.laps - hold.laps, ds = cand.sets_used - hold.sets_used;
+      if (dl > 0) parts.push("+" + dl + "L");
+      else if (dl < 0) parts.push(dl + "L");
+      if (ds < 0) parts.push(Math.abs(ds) + " fewer set" + (ds === -1 ? "" : "s"));
+      else if (ds > 0) parts.push("+" + ds + " set" + (ds === 1 ? "" : "s"));
     }
-    parts.push("makes the flag ✓");
-    parts.push(best.stops + " stop" + (best.stops === 1 ? "" : "s") + " left, " + best.sets_used + " sets used");
+    parts.push(cand.stops + " stop" + (cand.stops === 1 ? "" : "s"));
+    parts.push(cand.sets_used + " sets ✓");
     return parts.join(" · ");
   }
 
