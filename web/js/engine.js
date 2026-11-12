@@ -158,9 +158,12 @@ const Engine = (() => {
     // VE=0 (~24 laps at Monza), long before the 120 L tank is dry — so the pit
     // window is the MORE RESTRICTIVE of fuel and VE. Without live VE we fall back
     // to fuel only (or the plan's max_stint_laps cap, applied below).
+    // prefer the live measured VE drain (state.ve_per_lap_live, %/lap) over the
+    // static config estimate — the pit window then tracks the real car on the day.
     let energyLapsLeft = null;
-    if (cfg.energy_mode === "ve" && state.virtual_energy != null && cfg.ve_per_lap > 0) {
-      energyLapsLeft = (state.virtual_energy * 100) / cfg.ve_per_lap;  // fraction -> %
+    const vePerLap = (state.ve_per_lap_live && state.ve_per_lap_live > 0) ? state.ve_per_lap_live : cfg.ve_per_lap;
+    if (cfg.energy_mode === "ve" && state.virtual_energy != null && vePerLap > 0) {
+      energyLapsLeft = (state.virtual_energy * 100) / vePerLap;  // fraction -> %
     }
     // if no live VE but the plan caps the stint (VE window), respect that cap too
     let capLapsLeft = null;

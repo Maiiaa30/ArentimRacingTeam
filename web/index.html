@@ -300,6 +300,20 @@ function measuredFuelPerLap(){
   const last=drops.slice(-5);
   return last.reduce((x,y)=>x+y,0)/last.length;
 }
+// live Virtual Energy drain (% per lap) from consecutive VE readings — lets the
+// pit window track the REAL rate instead of the static ve_per_lap estimate, and
+// lets the operator validate the 4.2%/lap assumption on track.
+function measuredVePerLap(){
+  if(!Array.isArray(lapLog) || lapLog.length<2) return null;
+  const drops=[];
+  for(let i=1;i<lapLog.length;i++){
+    const a=lapLog[i-1].ve, b=lapLog[i].ve;      // fractions 0..1
+    if(a!=null && b!=null){ const d=(a-b)*100; if(d>0 && d<25) drops.push(d); }  // %/lap
+  }
+  if(!drops.length) return null;
+  const last=drops.slice(-5);
+  return last.reduce((x,y)=>x+y,0)/last.length;
+}
 
 // standings / sectors modal
 // class metadata — reusable across races (LMU: Hypercar + LMGT3; add more here)
@@ -426,7 +440,8 @@ function render(){
   plan.stints.forEach((s,i)=>{ if(s.in_lap <= state.laps_done) activeIdx = i; });
   const active = plan.stints[activeIdx];
   const futureStops = plan.stints.filter(s=> s.in_lap > state.laps_done).length;
-  const m = Engine.liveMetrics(cfg, {...state, remaining_stops:futureStops}, plan, wx);
+  const veRate = measuredVePerLap();   // live %/lap, null until 2+ laps logged
+  const m = Engine.liveMetrics(cfg, {...state, remaining_stops:futureStops, ve_per_lap_live:veRate}, plan, wx);
 
   $('clock').textContent = hms(state.session_remaining_s != null ? state.session_remaining_s : (cfg.duration_s - state.elapsed_s));
   // track flag chip
@@ -453,7 +468,8 @@ function render(){
   const haveFuel = state.fuel_now!=null;
   $('fuelSub').textContent = (haveFuel ? state.fuel_now.toFixed(1)+' L' : '—')
     + (realFpl!=null ? ' · '+realFpl.toFixed(2)+' L/lap' : '')
-    + (state.virtual_energy!=null ? ' · VE '+Math.round(state.virtual_energy*100)+'%' : '');
+    + (state.virtual_energy!=null ? ' · VE '+Math.round(state.virtual_energy*100)+'%' : '')
+    + (veRate!=null ? ' ('+veRate.toFixed(1)+'%/lap)' : '');
   if(!haveFuel){ $('fuelLaps').textContent='—'; $('pitIn').textContent='—'; }
 
   $('lapsLeft').textContent = m.laps_left;
@@ -983,6 +999,7 @@ function captureLap(lapNo){
     lap_s: (state.last_lap_s!=null ? +state.last_lap_s : null),
     driver: state.current_driver || '—',
     fuel: (state.fuel_now!=null ? +state.fuel_now : null),
+    ve: (state.virtual_energy!=null ? +state.virtual_energy : null),
     tire_laps: (state.laps_on_tires!=null ? state.laps_on_tires : null),
     pos: (state.position!=null ? state.position : null),
     wx: wxNow(),
