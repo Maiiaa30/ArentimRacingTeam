@@ -6,12 +6,30 @@
 
 ---
 
+## The day before — prove the pipeline (no game needed)
+
+The bridge → Supabase → board chain is the single point of failure. Test it
+without the game using demo mode:
+
+```
+python3 pitwall_bridge.py --demo --supabase
+```
+
+Open the board on another device — it should come alive with a synthetic race
+(our car **#38 BMW M4 LMGT3**, Francisco driving, rivals moving). This proves
+your Supabase URL / anon key / passcode and network are correct. If the board
+updates here, the only unknown left on race day is the shared-memory read.
+The bridge console prints `supabase push FAILING` if a push fails — if you see
+that, fix network/keys before trusting the live run.
+
 ## Before the start
 
-1. **Bridge up on the game PC.** `python pitwall_bridge.py` (see [DEPLOY.md](DEPLOY.md)).
+1. **Bridge up on the game PC.** `python pitwall_bridge.py --print --supabase`
+   (see [DEPLOY.md](DEPLOY.md)). `--print` lets you eyeball the mapped fields.
    Confirm the header chip reads **● live · cloud**. If it says **waiting** the
    board has no data yet; if **● NO FEED** (red) the bridge isn't pushing — fix
-   before the lights.
+   before the lights. The bridge console also shouts `push FAILING` if Supabase
+   stops accepting pushes.
 2. **Open the board** on every device that needs it. All sync off the same
    Supabase row, so they all show the same thing.
 3. **Check the default plan** — *Default strat* button. Should read 8 stints /
@@ -87,8 +105,9 @@ The board makes this loud on purpose:
   (fuel, pit-in, gaps) go grey/frozen. **Do not trust a frozen pit-in count.**
 - The Brain freezes (yellow) and stops recomputing.
 - **Fix the source:** check the bridge process on the game PC and its network.
-  Once it pushes again the board clears itself within a few seconds — no reload
-  needed.
+  The bridge console will be printing `supabase push FAILING` — that confirms the
+  break is bridge→Supabase, not the board. Once it pushes again the board clears
+  itself within a few seconds (console prints `push recovered`) — no reload needed.
 - If you can't recover it fast, fall back to the printed default plan + a stopwatch:
   stops every ~24 laps, driver blocks Francisco → Rui → Helder → Diogo.
 

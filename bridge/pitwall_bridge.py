@@ -387,7 +387,9 @@ def demo_state(tick):
         "stint_lap": (tick % 96) // 4,
         "elapsed_s": tick * 24,
         "weather_now": "wet" if wet else "dry",
-        "current_driver": ["D1", "D2", "D3", "D4"][(lap // 23) % 4],
+        # real driver blocks (Francisco starts, then Rui, Helder, Diogo) so the
+        # demo mirrors race day — this is the pre-race pipeline test, not a toy.
+        "current_driver": ["Francisco Coelho", "Rui Garcia", "Helder Marques", "Diogo Rodrigues"][(lap // 23) % 4],
         "position": 3 + (tick % 5 == 0),
         "gap_ahead_s": 3.2, "gap_behind_s": 5.8,
         "tire_wear_pct": min(100, (tick % 96)), "laps_on_tires": (tick % 96) // 4,
@@ -407,18 +409,18 @@ def demo_state(tick):
         "rivals": [
             {"pos": p, "num": num, "manuf": mf, "model": mdl, "team": tm, "driver": dr,
              "name": "#" + num + " " + mf, "cls": cl,
-             "gap_s": 0 if num == "30" else round(p * 3.5, 1),
+             "gap_s": 0 if num == "38" else round(p * 3.5, 1),
              "last_lap_s": round((95.0 - (8 if cl == "Hypercar" else 0)) + p * 0.2, 3),
              "best_lap_s": round((95.0 - (8 if cl == "Hypercar" else 0)) - 0.4, 3),
              "laps": lap + (int(lap * 0.08) if cl == "Hypercar" else 0),
-             "in_pits": False, "is_us": num == "30"}
+             "in_pits": False, "is_us": num == "38"}
             for p, (num, mf, mdl, tm, dr, cl) in enumerate([
                 ("7", "Toyota", "GR010 Hybrid", "Toyota Gazoo Racing", "Kobayashi", "Hypercar"),
                 ("51", "Ferrari", "499P", "Ferrari AF Corse", "Pier Guidi", "Hypercar"),
                 ("2", "Cadillac", "V-Series.R", "Cadillac Racing", "Bamber", "Hypercar"),
                 ("6", "Porsche", "963", "Porsche Penske", "Estre", "Hypercar"),
                 ("92", "Porsche", "911 GT3 R", "Manthey PureRxcing", "Malykhin", "GT3"),
-                ("30", "Arentim", "GT3", "Arentim Racing Team", "", "GT3"),
+                ("38", "BMW", "M4 LMGT3", "Arentim Racing Team", "Francisco Coelho", "GT3"),
                 ("15", "BMW", "M4 GT3", "WRT", "Rossi", "GT3"),
                 ("88", "Lamborghini", "Huracán GT3", "Iron Lynx", "Perera", "GT3"),
                 ("46", "Aston", "Vantage GT3", "Heart of Racing", "Riberas", "GT3"),
@@ -507,6 +509,9 @@ def main():
     period = 1.0 / max(0.5, args.hz)
     tick = 0
     errstreak = 0
+    pushok = 0          # consecutive successful Supabase pushes
+    pushfail = 0        # consecutive failed Supabase pushes
+    heartbeat = max(1, int(round(args.hz * 30)))   # OK heartbeat ~every 30s
     print(f"[bridge] start — print={args.do_print} demo={args.demo} supabase={args.supabase}")
     try:
         while True:
@@ -526,8 +531,22 @@ def main():
                 print(json.dumps(state, indent=2, default=str))
             if args.supabase:
                 ok = push_supabase(state)       # already swallows its own errors
-                if args.do_print:
-                    print(f"[bridge] supabase push: {'ok' if ok else 'FAILED'}")
+                if ok:
+                    pushok += 1
+                    # on recovery, say so; otherwise a quiet heartbeat proves it's alive
+                    if pushfail:
+                        print(f"[bridge] supabase push recovered (lap {state.get('laps_done')})")
+                    elif args.do_print or pushok % heartbeat == 0:
+                        print(f"[bridge] supabase: {pushok} pushes ok (lap {state.get('laps_done')})")
+                    pushfail = 0
+                else:
+                    pushfail += 1
+                    pushok = 0
+                    # LOUD even without --print: the person at the game PC must know
+                    # the board has stopped updating (push_supabase logged the cause).
+                    if pushfail in (1, 5) or pushfail % 50 == 0:
+                        print(f"[bridge] supabase push FAILING (x{pushfail}) — "
+                              f"board is NOT updating. Check network/keys.", file=sys.stderr)
             tick += 1
             time.sleep(period)
     except KeyboardInterrupt:
