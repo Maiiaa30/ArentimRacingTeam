@@ -81,9 +81,12 @@
         <div class="kv"><span class="k">Stint left</span><span class="v" id="stintLeft">—</span></div>
         <div class="kv"><span class="k">Stint time</span><span class="v" id="stintTime">—</span></div>
         <div class="kv"><span class="k">Stint pace</span><span class="v" id="stintPace">—</span></div>
+        <div class="kv"><span class="k">Seat time</span><span class="v" id="seatTime">—</span></div>
         <div class="kv"><span class="k">Laps left</span><span class="v" id="lapsLeft">—</span></div>
         <div class="kv"><span class="k">Stops left</span><span class="v" id="stops">—</span></div>
         <div class="kv"><span class="k">Avg lap</span><span class="v" id="avg">—</span></div>
+        <div class="kv"><span class="k">Pace target</span><span class="v" id="paceTarget">—</span></div>
+        <div class="kv"><span class="k">To flag</span><span class="v" id="toFlag">—</span></div>
         <div class="kv"><span class="k">Make finish</span><span id="finish"></span></div>
       </div>
       <div class="panel">
@@ -94,6 +97,8 @@
         <div class="kv"><span class="k">Tyre life (worst)</span><span class="v" id="tireWear">—</span></div>
         <div class="kv"><span class="k">Laps on set</span><span class="v" id="tireLaps">—</span></div>
         <div class="kv"><span class="k">Wear-out in</span><span class="v" id="wearOut">—</span></div>
+        <div class="kv"><span class="k">Track temp</span><span class="v" id="tempTrend">—</span></div>
+        <div class="note" id="psiHint"></div>
         <div class="twheels" id="twheels"></div>
       </div>
       <div class="panel evpanel">
@@ -386,6 +391,114 @@ function stintPaceTrend(){
   return { trend, n: laps.length, recentAvg, best };
 }
 
+// ---- Pace target: lap time needed to make the planned distance -----------
+// Can we even complete the planned laps inside the race clock? Required avg
+// lap = remaining green time (minus the pit time still to come) / laps left.
+// Compare to the live average: under target = comfortable, over = can't make
+// the distance at this pace.
+function paceTargetCalc(m, plan, futureStops){
+  const lapsLeft = m.laps_left;
+  if(lapsLeft==null || lapsLeft<=0) return null;
+  const raceLeft = (state.session_remaining_s!=null) ? state.session_remaining_s
+                 : (cfg.duration_s - (state.elapsed_s||0));
+  if(raceLeft==null || raceLeft<=0) return null;
+  const pitLeft = (futureStops||0) * (cfg.pit_loss_s||0);
+  const target = (raceLeft - pitLeft) / lapsLeft;   // s/lap
+  const live = avgLapLive();
+  return { target, live, slack: (live!=null ? target-live : null) };
+}
+
+// ---- To-flag margin: energy + fuel for the WHOLE rest of the race --------
+// Not just the next stop: with the stops we plan to make (each a full refuel /
+// 100% VE), do we reach the flag, and by how much? Reports the binding of VE
+// and fuel as a lap margin.
+function toFlagCalc(m, futureStops, veRate, fplMeasured){
+  const lapsLeft = m.laps_left;
+  if(lapsLeft==null) return null;
+  const legs = [];
+  if(cfg.energy_mode==='ve' && state.virtual_energy!=null){
+    const drain = (veRate && veRate>0) ? veRate : cfg.ve_per_lap;
+    if(drain>0){
+      const avail = (state.virtual_energy*100) + (futureStops*100);   // %
+      legs.push({ u:'VE', margin: avail/drain - lapsLeft });
+    }
+  }
+  if(state.fuel_now!=null){
+    const fpl = (fplMeasured && fplMeasured>0) ? fplMeasured : cfg.fuel_per_lap;
+    if(fpl>0){
+      const avail = state.fuel_now + futureStops*(cfg.tank_cap||0);
+      legs.push({ u:'Fuel', margin: avail/fpl - lapsLeft });
+    }
+  }
+  if(!legs.length) return null;
+  const b = legs.reduce((a,c)=> c.margin < a.margin ? c : a);
+  return { unit:b.u, margin:b.margin };
+}
+
+// ---- Seat time: total + continuous time at the wheel for current driver --
+// _driverSeatStartEl resets whenever the driver name changes (a real swap),
+// so continuous time spans back-to-back fuel-only stints by the same driver.
+function seatTimeCalc(){
+  const d = state.current_driver;
+  if(!d || d==='—') return null;
+  // total = sum of completed stints by this driver + the live continuous block
+  let total = 0;
+  stintLog.forEach(s=>{ if(s.driver===d && s.durEl!=null) total += s.durEl; });
+  const continuous = (_driverSeatStartEl!=null && state.elapsed_s!=null)
+    ? Math.max(0, state.elapsed_s - _driverSeatStartEl) : (state.stint_time_s||0);
+  // the live continuous block isn't in stintLog yet — add it to the total too
+  total += continuous;
+  const maxC = cfg.driver_max_consecutive_min ? cfg.driver_max_consecutive_min*60 : null;
+  const maxT = cfg.driver_max_total_min ? cfg.driver_max_total_min*60 : null;
+  return { total, continuous, maxC, maxT,
+    overC: maxC!=null && continuous>maxC, nearC: maxC!=null && continuous>maxC*0.85,
+    overT: maxT!=null && total>maxT };
+}
+
+// ---- Undercut / overcut: what a stop NOW does to track position ----------
+// A stop costs ~pit_loss_s. The car behind only passes us if its gap is less
+// than that loss; otherwise we rejoin still ahead. Fresh tyres may undercut
+// the car ahead if its gap is under the loss and it hasn't stopped.
+function undercutCalc(){
+  const drop = cfg.pit_loss_s || 0;
+  const gb = state.gap_behind_s, ga = state.gap_ahead_s, pos = state.position;
+  if(gb==null && ga==null) return null;
+  const out = { drop, pos };
+  if(gb!=null){
+    if(gb > drop){ out.behind = { safe:true, by: gb-drop }; }
+    else { out.behind = { safe:false, by: drop-gb }; }
+  }
+  if(ga!=null && ga < drop){ out.undercut = { by: drop-ga }; }  // we'd rejoin ahead-ish
+  return out;
+}
+
+// ---- Track-temp trend + cold-pressure hint -------------------------------
+let _tempLog = [];   // ring of {ts, track} to read a trend over ~5 min
+function pushTemp(){
+  if(state.track_temp==null) return;
+  const now = Date.now();
+  const last = _tempLog[_tempLog.length-1];
+  if(!last || now-last.ts > 20000){ _tempLog.push({ts:now, track:state.track_temp}); }
+  if(_tempLog.length > 40) _tempLog.shift();
+}
+function tempTrendCalc(){
+  if(state.track_temp==null) return null;
+  pushTemp();
+  // compare to a reading ~5 min old
+  const old = _tempLog.find(e=> Date.now()-e.ts <= 330000 && Date.now()-e.ts >= 180000)
+            || _tempLog[0];
+  const delta = (old && old.ts !== _tempLog[_tempLog.length-1]?.ts) ? state.track_temp-old.track : 0;
+  const arrow = delta > 0.3 ? '↑' : delta < -0.3 ? '↓' : '→';
+  const psiAdj = (state.track_temp - (cfg.ref_track_temp_c||30)) * (cfg.psi_per_degC||0);
+  return { track: state.track_temp, air: state.air_temp, arrow, delta, psiAdj };
+}
+
+// time lost to incidents (seconds) for a stint/driver aggregate
+function incidentCost(contacts, offtracks){
+  const c = cfg.incident_cost || {contact_s:4, offtrack_s:1};
+  return (contacts||0)*(c.contact_s||0) + (offtracks||0)*(c.offtrack_s||0);
+}
+
 // standings / sectors modal
 // class metadata — reusable across races (LMU: Hypercar + LMGT3; add more here)
 const CLASS_META = {
@@ -547,6 +660,50 @@ function render(){
   $('stops').textContent = futureStops;
   const avgL = avgLapLive();
   $('avg').textContent = avgL!=null ? avgL.toFixed(2)+'s' : '—';
+
+  // PACE TARGET — lap time needed to make the planned distance in the clock
+  const pt = $('paceTarget');
+  if(pt){
+    const pc = paceTargetCalc(m, plan, futureStops);
+    if(!pc){ pt.textContent='—'; pt.className='v'; }
+    else {
+      let cls='', tail='';
+      if(pc.slack!=null){
+        cls = pc.slack >= 1 ? 'ok' : pc.slack >= -0.3 ? 'warn' : 'bad';
+        tail = pc.slack >= 0 ? ' · '+pc.slack.toFixed(1)+'s spare' : ' · short '+Math.abs(pc.slack).toFixed(1)+'s';
+      }
+      pt.textContent = fmtLap(pc.target) + tail;
+      pt.className = 'v '+cls;
+    }
+  }
+
+  // TO FLAG — whole-race energy/fuel margin given the stops we plan to make
+  const tf = $('toFlag');
+  if(tf){
+    const fc2 = toFlagCalc(m, futureStops, veRate, realFpl);
+    if(!fc2){ tf.textContent='—'; tf.className='v'; }
+    else {
+      const mg = fc2.margin;
+      const cls = mg >= 1 ? 'ok' : mg >= -0.5 ? 'warn' : 'bad';
+      tf.textContent = (mg>=0 ? '+'+mg.toFixed(1)+' laps' : mg.toFixed(1)+' laps') + ' ('+fc2.unit+')';
+      tf.className = 'v '+cls;
+    }
+  }
+
+  // SEAT TIME — continuous time at the wheel for the current driver, vs the reg
+  const stv = $('seatTime');
+  if(stv){
+    const se = seatTimeCalc();
+    if(!se){ stv.textContent='—'; stv.className='v'; }
+    else {
+      const cont = fmtClock(se.continuous);
+      const cls = se.overC||se.overT ? 'bad' : se.nearC ? 'warn' : '';
+      stv.textContent = cont + (se.maxC ? ' / '+Math.round(se.maxC/60)+'m' : '')
+        + (se.overC ? ' OVER' : '');
+      stv.className = 'v '+cls;
+    }
+  }
+
   $('finish').innerHTML = haveFuel
     ? `<span class="pill ${m.make_finish?'ok':'bad'}">${m.make_finish?'YES':'NO'}</span>`
       + (m.fuel_deficit>0?` <span class="note" style="margin:0">short ${m.fuel_deficit}L</span>`:'')
@@ -659,11 +816,24 @@ function render(){
         callLine = '<div class="ns-call '+call.cls+'"><b>'+call.verb+'</b> '
           + '<span class="nc-u">'+call.unit+'</span> · '+call.detail+'</div>';
       }
+      // UNDERCUT / OVERCUT — what a stop now does to track position
+      let trackLine = '';
+      const uc = undercutCalc();
+      if(uc){
+        const bits = [];
+        if(uc.behind){
+          bits.push(uc.behind.safe
+            ? '<span class="tp-ok">keep P'+(uc.pos||'?')+'</span> (+'+uc.behind.by.toFixed(0)+'s on P'+((uc.pos||0)+1)+')'
+            : '<span class="tp-bad">lose P'+(uc.pos||'?')+'</span> → rejoin '+uc.behind.by.toFixed(0)+'s behind');
+        }
+        if(uc.undercut) bits.push('<span class="tp-ok">undercut P'+Math.max(1,(uc.pos||2)-1)+'</span> if they stay out');
+        if(bits.length) trackLine = '<div class="ns-track">Box now: '+bits.join(' · ')+'</div>';
+      }
       nsEl.className = 'nextstop' + (boxOn ? ' due' : '');
       nsEl.innerHTML =
         '<div class="ns-head">NEXT STOP <span class="ns-when">'+when+'</span></div>'+
         '<div class="ns-main">+'+fuelAdd+'L · '+tyre+' · '+swap+'</div>'+
-        winLine + callLine;
+        winLine + callLine + trackLine;
     }
   }
   // race info strip
@@ -706,6 +876,25 @@ function render(){
   const tyreLimited = lapsToLimit!=null && lapsToLimit < m.pit_in_laps;
   wo.style.color = tyreLimited ? 'var(--bad)' : lapsToLimit!=null && lapsToLimit<8 ? 'var(--warn)' : '';
   if(tyreLimited) wo.textContent += ' · tyre-limited';
+
+  // TRACK TEMP trend + cold-pressure hint (hotter track => lower cold set)
+  const tt=$('tempTrend'), ph=$('psiHint');
+  if(tt){
+    const te = tempTrendCalc();
+    if(!te){ tt.textContent='—'; tt.className='v'; if(ph) ph.textContent=''; }
+    else {
+      tt.textContent = te.track.toFixed(0)+'°C '+te.arrow
+        + (te.air!=null ? ' · air '+te.air.toFixed(0)+'°C' : '');
+      tt.className = 'v';
+      if(ph){
+        if(Math.abs(te.psiAdj) >= 0.1){
+          ph.textContent = (te.psiAdj>0?'Track above ref — drop cold psi ~'+te.psiAdj.toFixed(1)
+                            : 'Track below ref — add cold psi ~'+Math.abs(te.psiAdj).toFixed(1))
+                            + ' (vs '+(cfg.ref_track_temp_c||30)+'°C set)';
+        } else ph.textContent = 'Cold pressures on reference ('+(cfg.ref_track_temp_c||30)+'°C)';
+      }
+    }
+  }
 
   // per-wheel tyre grid: wear % always; temp only when the feed provides it (spec mode may not)
   const tw=$('twheels');
@@ -1247,14 +1436,44 @@ function renderDrivers(){
   if(actNames.length){
     const arows = actNames.map(d=>{
       const v=act[d];
+      const lost = incidentCost(v.contacts, v.offtracks);
       return `<tr><td>${d}</td><td>${v.stints}</td><td>${v.laps}</td>`+
         `<td>${v.best!=null?fmtLap(v.best):'—'}</td>`+
         `<td class="${v.contacts>0?'bad':''}">${v.contacts}</td>`+
-        `<td class="${v.offtracks>0?'warn':''}">${v.offtracks}</td></tr>`;
+        `<td class="${v.offtracks>0?'warn':''}">${v.offtracks}</td>`+
+        `<td class="${lost>=5?'bad':lost>0?'warn':''}">${lost>0?'~'+lost+'s':'—'}</td></tr>`;
     }).join('');
     actBlock = `<h3 class="sub-h">Actual — this session</h3>`+
       `<table class="laptbl"><thead><tr><th>Driver</th><th>Stints</th><th>Laps</th>`+
-      `<th>Best lap</th><th>Contacts</th><th>Off-track</th></tr></thead><tbody>${arows}</tbody></table>`;
+      `<th>Best lap</th><th>Contacts</th><th>Off-track</th><th>Time lost</th></tr></thead><tbody>${arows}</tbody></table>`;
+    // ---- SEAT TIME (actual drive time per driver, vs the endurance reg) ----
+    const seat = {};
+    stintLog.forEach(s=>{ const d=s.driver||'—'; seat[d]=(seat[d]||0)+(s.durEl||0); });
+    if(_curStint && state.current_driver){
+      const live = (_driverSeatStartEl!=null && state.elapsed_s!=null)
+        ? Math.max(0, state.elapsed_s - _driverSeatStartEl) : 0;
+      // the live continuous block isn't in stintLog yet
+      seat[state.current_driver] = (seat[state.current_driver]||0) + live;
+    }
+    const seatNames = Object.keys(seat);
+    if(seatNames.length){
+      const maxC = cfg.driver_max_consecutive_min ? cfg.driver_max_consecutive_min*60 : null;
+      const maxT = cfg.driver_max_total_min ? cfg.driver_max_total_min*60 : null;
+      const sr = seatNames.map(d=>{
+        const tot = seat[d];
+        const isCur = d===state.current_driver;
+        const cont = (isCur && _driverSeatStartEl!=null && state.elapsed_s!=null)
+          ? Math.max(0, state.elapsed_s-_driverSeatStartEl) : null;
+        const overT = maxT!=null && tot>maxT;
+        const overC = cont!=null && maxC!=null && cont>maxC;
+        return `<tr><td>${d}${isCur?' <span class="dim">(in car)</span>':''}</td>`+
+          `<td class="${overT?'bad':''}">${hms(tot)}${maxT?' / '+Math.round(maxT/60)+'m':''}</td>`+
+          `<td class="${overC?'bad':''}">${cont!=null?fmtClock(cont):'—'}${isCur&&maxC?' / '+Math.round(maxC/60)+'m':''}</td></tr>`;
+      }).join('');
+      actBlock += `<h3 class="sub-h">Seat time — actual</h3>`+
+        `<table class="laptbl"><thead><tr><th>Driver</th><th>Total</th><th>Continuous now</th>`+
+        `</tr></thead><tbody>${sr}</tbody></table>`;
+    }
     // per-stint detail
     if(allStints.length){
       const srows = allStints.map((s,i)=>{
@@ -1454,6 +1673,8 @@ let _curStint = null;       // accumulator for the stint in progress
 let _pendStint = null;      // finalized stint awaiting its pit time
 let _pitStartEl = null;     // elapsed_s at pit entry (pit-timer + pit duration)
 let _lastImpactAgo = null;  // edge-detect new contacts (ago resets to ~0 on impact)
+let _curDriverName = null;      // detect a real driver swap (name change)
+let _driverSeatStartEl = null;  // elapsed_s when the current driver got in (seat-time reg)
 
 function _worstTyreLife(){
   if(!state.wheels || !state.wheels.length) return null;
@@ -1544,6 +1765,12 @@ const dname = n => (n && _ALIASES[n]) || n;   // clean game-reported driver name
 PitDB.onState(s => {
   LIVE_FIELDS.forEach(k => { if(s[k] !== undefined) state[k] = s[k]; });
   if(state.current_driver) state.current_driver = dname(state.current_driver);
+  // seat-time reg: reset the continuous clock only on a REAL driver swap (name
+  // change), so it spans back-to-back fuel-only stints by the same driver
+  if(state.current_driver && state.current_driver!=='—' && state.current_driver !== _curDriverName){
+    _curDriverName = state.current_driver;
+    _driverSeatStartEl = state.elapsed_s!=null ? state.elapsed_s : 0;
+  }
   if(Array.isArray(s.wheels)) state.wheels = s.wheels;
   if(Array.isArray(s.rivals)){ s.rivals.forEach(r=>{ if(r && r.driver) r.driver = dname(r.driver); }); state.rivals = s.rivals; }
   if(s.sectors && typeof s.sectors === 'object') state.sectors = s.sectors;

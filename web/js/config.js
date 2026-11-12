@@ -54,6 +54,24 @@ window.RACE_CONFIG = {
   pit_window_early: 2,
   pit_window_late: 2,
 
+  // --- endurance driver-time regs (optional; null = no limit) ---
+  // LMU private lobbies don't enforce these, but a real endurance engineer still
+  // regulates seat time: no driver over a max continuous stint, and (if set) a
+  // max total. Set to null to disable the warning.
+  driver_max_consecutive_min: 80,  // max continuous time at the wheel (minutes)
+  driver_max_total_min: null,      // max total drive time per driver (minutes)
+
+  // --- incident time cost (estimate, seconds) — turns contact/off counts into
+  // real time lost, so a messy stint shows its cost on the board. Rough: a light
+  // contact ~4s, a track-limits off ~1s. Tune after a session.
+  incident_cost: { contact_s: 4, offtrack_s: 1 },
+
+  // --- tyre pressure reference (cold-set guidance vs track temp) ---
+  // The cold pressures were dialled for ref_track_temp_c. Hotter track => lower
+  // the cold set by ~psi_per_degC per +1°C to land in the same hot window.
+  ref_track_temp_c: 30,
+  psi_per_degC: 0.1,
+
   // --- weather ---
   wet_lap_factor: 1.12,        // wet lap time = dry * this (PLACEHOLDER)
   wet_fuel_factor: 1.0,        // fuel/lap multiplier in wet
