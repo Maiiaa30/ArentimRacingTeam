@@ -48,6 +48,11 @@ window.RACE_CONFIG = {
 
   // --- pit ---
   pit_loss_s: 60,              // Monza: pit-lane delta + ~42s VE refuel/service (refine on day)
+  // pit WINDOW band around the ideal stop lap (shown on the board as e.g. L18–22).
+  // early = how many laps sooner you can box (wastes a little energy); late = how
+  // far you can stretch toward the limit (eats the safety margin).
+  pit_window_early: 2,
+  pit_window_late: 2,
 
   // --- weather ---
   wet_lap_factor: 1.12,        // wet lap time = dry * this (PLACEHOLDER)

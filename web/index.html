@@ -87,7 +87,7 @@
         <div class="kv"><span class="k">Used / budget</span><span class="v" id="tireCount">—</span></div>
         <div class="bar" id="tireBar"><i style="width:0%"></i></div>
         <div class="note" id="tireNote"></div>
-        <div class="kv"><span class="k">Current set wear</span><span class="v" id="tireWear">—</span></div>
+        <div class="kv"><span class="k">Tyre life (worst)</span><span class="v" id="tireWear">—</span></div>
         <div class="kv"><span class="k">Laps on set</span><span class="v" id="tireLaps">—</span></div>
         <div class="kv"><span class="k">Wear-out in</span><span class="v" id="wearOut">—</span></div>
         <div class="twheels" id="twheels"></div>
@@ -519,13 +519,28 @@ function render(){
       const swap = sameDrv
         ? '<b class="ns-stay">stays in</b>'
         : '→ <b>'+nextStint.driver+'</b>';
-      const lapsTo = Math.max(0, nextStint.in_lap - state.laps_done);
+      // countdown: prefer the LIVE fuel/VE pit-in (the truth for the current
+      // stint) over the planned stint boundary, which assumes a fresh stint and
+      // ignores energy already used. Falls back to the plan when no live fuel.
+      const liveIdeal = (haveFuel && m.pit_window) ? m.pit_window.ideal : nextStint.in_lap;
+      const lapsTo = (haveFuel && m.pit_window) ? m.pit_in_laps
+                     : Math.max(0, nextStint.in_lap - state.laps_done);
       const when = boxOn ? '<span class="ns-now">BOX NOW</span>'
-        : 'lap '+nextStint.in_lap+' · in '+lapsTo+' lap'+(lapsTo===1?'':'s');
+        : 'lap '+liveIdeal+' · in '+lapsTo+' lap'+(lapsTo===1?'':'s');
+      // live pit WINDOW from current fuel/VE: a band around the ideal stop lap
+      // so the operator can flex (e.g. L18–22, ideal 20). Only when fuel is live.
+      let winLine = '';
+      if(haveFuel && m.pit_window && m.pit_window.late > state.laps_done){
+        const w = m.pit_window;
+        winLine = '<div class="ns-win">Window <b>L'+w.early+'–'+w.late+'</b>'
+          + ' · ideal <b>L'+w.ideal+'</b>'
+          + (m.ve_limited?' · VE':'') + '</div>';
+      }
       nsEl.className = 'nextstop' + (boxOn ? ' due' : '');
       nsEl.innerHTML =
         '<div class="ns-head">NEXT STOP <span class="ns-when">'+when+'</span></div>'+
-        '<div class="ns-main">+'+fuelAdd+'L · '+tyre+' · '+swap+'</div>';
+        '<div class="ns-main">+'+fuelAdd+'L · '+tyre+' · '+swap+'</div>'+
+        winLine;
     }
   }
   // race info strip
@@ -556,7 +571,10 @@ function render(){
   pe.className='v '+(state.penalties>0?'bad':'ok');
   // tires extra + wear-out projection (linear from worst wheel)
   const worstWear = haveWheels ? Math.max(0, ...state.wheels.map(w=>w.wear||0)) : 0;
-  $('tireWear').textContent = haveWheels ? Math.round(worstWear*100)+'%' : '—';
+  // worst-wheel LIFE remaining (lowest % = most worn tyre)
+  const we=$('tireWear');
+  we.textContent = haveWheels ? Math.round(100-worstWear*100)+'%' : '—';
+  we.className = 'v '+(!haveWheels?'':(100-worstWear*100)<=40?'warn':(100-worstWear*100)<=20?'bad':'ok');
   $('tireLaps').textContent = state.laps_on_tires!=null ? state.laps_on_tires : '—';
   const rate = worstWear / Math.max(1, state.laps_on_tires||0);  // wear fraction per lap
   const lapsToLimit = rate>0 ? Math.floor((1.0 - worstWear)/rate) : null;
@@ -574,11 +592,13 @@ function render(){
     tw.innerHTML = ws.map((w,i)=>{
       if(!w) return `<div class="tw"><div class="tw-n">${wn[i]}</div>`+
         `<div class="tw-pct dim">—</div><div class="tw-temp dim">—</div></div>`;
-      const wear=Math.round((w.wear||0)*100);
-      const wcls=(w.flat||w.detached)?'bad':wear>=60?'warn':'ok';
+      // show tyre LIFE remaining (100% fresh -> 0% dead), the natural "how good
+      // is my tyre" number. worn fraction comes off the feed; life = 100 - worn.
+      const life=Math.round(100-(w.wear||0)*100);
+      const wcls=(w.flat||w.detached)?'bad':life<=40?'warn':'ok';
       const temp=(w.temp!=null)?Math.round(w.temp)+'°':'';
       return `<div class="tw"><div class="tw-n">${wn[i]}</div>`+
-        `<div class="tw-pct ${wcls}">${wear}%</div>`+
+        `<div class="tw-pct ${wcls}">${life}%</div>`+
         (temp?`<div class="tw-temp">${temp}</div>`:`<div class="tw-temp dim">—</div>`)+`</div>`;
     }).join('');
   }

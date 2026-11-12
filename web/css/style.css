@@ -339,6 +339,8 @@ table.laptbl.pace{margin-bottom:18px}
 .ns-main{font-family:var(--sans);font-size:14px;color:var(--txt);font-weight:600;line-height:1.35}
 .ns-main b{font-weight:800}
 .ns-new{color:#5fe08a} .ns-keep{color:#9aa4b2} .ns-stay{color:#49b6ff}
+.ns-win{font-family:var(--mono);font-size:11px;color:var(--mut);margin-top:3px;letter-spacing:.3px}
+.ns-win b{color:var(--txt);font-weight:700}
 .ev-count{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--txt);
   background:#1a2430;border:1px solid var(--line);border-radius:10px;padding:1px 7px;letter-spacing:0}
 .ev-expand{margin-left:auto;font-family:var(--mono);font-size:10px;font-weight:700;

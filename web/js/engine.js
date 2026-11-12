@@ -178,6 +178,20 @@ const Engine = (() => {
     const pitInLaps = Math.max(0, Math.floor(bindingLapsLeft - cfg.fuel_margin_laps));
     const veLimited = energyLapsLeft != null && energyLapsLeft < fuelLapsLeft;
 
+    // pit WINDOW (not a single lap): the ideal stop plus a band either side, so
+    // the operator can flex around traffic/safety. early = pit sooner (waste a
+    // little energy), late = stretch toward the limit (eats the safety margin).
+    const early = cfg.pit_window_early != null ? cfg.pit_window_early : 2;
+    const late  = cfg.pit_window_late  != null ? cfg.pit_window_late  : 2;
+    const idealPitLap = (state.laps_done || 0) + pitInLaps;
+    const pitWindow = {
+      ideal: idealPitLap,
+      early: Math.max((state.laps_done || 0), idealPitLap - early),
+      late:  idealPitLap + late,
+      early_in: Math.max(0, pitInLaps - early),   // countdown form
+      late_in:  pitInLaps + late
+    };
+
     const lapsLeft = plan.total_laps - state.laps_done;
     const remStops = state.remaining_stops != null ? state.remaining_stops : Math.max(0, plan.stops);
     const fuelNeeded = lapsLeft * fpl;
@@ -186,6 +200,7 @@ const Engine = (() => {
       fuel_laps_left: +fuelLapsLeft.toFixed(1),
       energy_laps_left: energyLapsLeft != null ? +energyLapsLeft.toFixed(1) : null,
       pit_in_laps: pitInLaps,
+      pit_window: pitWindow,            // {ideal,early,late} absolute laps + *_in countdown
       ve_limited: veLimited,            // true = VE forces the stop before fuel does
       laps_left: lapsLeft,
       make_finish: fuelAvail >= fuelNeeded,
