@@ -19,6 +19,7 @@
 </header>
 
 <div class="wrap">
+  <div id="feedBanner" class="feedbanner" onclick="document.getElementById('conn').scrollIntoView()"></div>
   <div id="boxAlert" class="box-alert">📻 BOX THIS LAP — swap to <span id="boxNext"></span></div>
   <!-- balanced hero grid: 3 stats -->
   <div class="grid big3">
@@ -97,6 +98,7 @@
         </h2>
         <div class="btns">
           <button class="alert" onclick="ev('rain_now')">Rain NOW</button>
+          <button onclick="ev('dry_up')">Dry up</button>
           <button class="alert" onclick="ev('forced_pit')">Forced Pit</button>
           <button onclick="ev('pace_change')">Pace Change</button>
           <button onclick="openWif()">What-if</button>
@@ -757,6 +759,15 @@ function runBrain(){
 function renderBrain(){
   const el = $('brain'); if(!el) return;
   if(!_brain || !_brain.best){ el.innerHTML=''; el.className='brain'; return; }
+  // feed dead → inputs are stale; show last line but DON'T offer to apply it
+  if(typeof feedState==='function' && feedState().k==='lost'){
+    el.className = 'brain frozen';
+    el.innerHTML =
+      `<div class="brain-top"><span class="brain-tag">◆ STRATEGY BRAIN · FROZEN</span></div>`+
+      `<div class="brain-head">Waiting for live data</div>`+
+      `<div class="brain-why">Last read: ${_brain.best.label}. Recompute paused until the feed returns.</div>`;
+    return;
+  }
   const b = _brain.best;
   const improve = b.key !== 'hold' && b.feasible;      // a better line exists
   const danger  = !b.feasible;                          // nothing clean — warn
@@ -931,6 +942,10 @@ function ev(type){
   if(type==='rain_now'){
     wx.push({start_s:state.elapsed_s, condition:'wet', wetness:0.6});
     regen(); logEvent('Rain → wets');
+  } else if(type==='dry_up'){
+    // track drying: close the wet segment, plan the rest back on slicks
+    wx.push({start_s:state.elapsed_s, condition:'dry', wetness:0});
+    regen(); logEvent('Dry line → slicks');
   } else if(type==='forced_pit'){
     // unscheduled stop NOW: refuel + fresh tyres + repair, add pit loss
     state.fuel_now = cfg.tank_cap; state.elapsed_s += cfg.pit_loss_s;
@@ -1220,13 +1235,44 @@ const LIVE_FIELDS = ['fuel_now','fuel_capacity','virtual_energy','state_of_charg
 let _syncInit = true, _lastFeed = null, _pitActive = false;
 let _stintStartLap = null, _stintStartEl = null;   // for derived stint/tyre context
 let _lastRegenLap = -1, _lastRegenWx = null;
-function updateConn(){
-  const el = $('conn'); if(!el) return;
-  const mode = PitDB.mode === 'supabase' ? 'cloud' : 'local';
-  if(_lastFeed == null){ el.className='chip conn idle'; el.textContent='● waiting · '+mode; return; }
+// Feed health tiers (seconds since last update). At ~112s/lap the bridge pushes
+// many times a lap, so a quiet feed means trouble, not a slow car.
+const FEED_LIVE = 8, FEED_LOST = 25;
+function feedState(){
+  if(_lastFeed == null) return { k:'wait', age:0 };
   const age = (Date.now() - _lastFeed)/1000;
-  if(age < 8){ el.className='chip conn live'; el.textContent='● live · '+mode; }
-  else { el.className='chip conn stale'; el.textContent='● stale '+(age<60?Math.round(age)+'s':Math.round(age/60)+'m')+' · '+mode; }
+  if(age < FEED_LIVE) return { k:'live', age };
+  if(age < FEED_LOST) return { k:'stale', age };
+  return { k:'lost', age };
+}
+const agStr = a => a<60 ? Math.round(a)+'s' : Math.round(a/60)+'m';
+function updateConn(){
+  const el = $('conn');
+  const mode = PitDB.mode === 'supabase' ? 'cloud' : 'local';
+  const f = feedState();
+  if(el){
+    if(f.k==='wait'){ el.className='chip conn idle'; el.textContent='● waiting · '+mode; }
+    else if(f.k==='live'){ el.className='chip conn live'; el.textContent='● live · '+mode; }
+    else if(f.k==='stale'){ el.className='chip conn stale'; el.textContent='● stale '+agStr(f.age)+' · '+mode; }
+    else { el.className='chip conn lost'; el.textContent='● NO FEED '+agStr(f.age)+' · '+mode; }
+  }
+  // body classes drive the dimmed/frozen visuals; banner is the loud warning
+  document.body.classList.toggle('feed-stale', f.k==='stale');
+  document.body.classList.toggle('feed-lost',  f.k==='lost');
+  const banner = $('feedBanner');
+  if(banner){
+    if(f.k==='lost'){
+      banner.className = 'feedbanner show lost';
+      banner.textContent = '⚠ NO TELEMETRY — '+agStr(f.age)+' since last update. Numbers below are FROZEN. Check the bridge.';
+    } else if(f.k==='stale'){
+      banner.className = 'feedbanner show';
+      banner.textContent = '◍ Feed quiet — '+agStr(f.age)+' since last update.';
+    } else {
+      banner.className = 'feedbanner';
+    }
+  }
+  // feed death freezes render(), so keep the Brain card honest from here
+  if(typeof renderBrain === 'function') renderBrain();
 }
 setInterval(updateConn, 1000);
 const _ALIASES = window.DRIVER_ALIASES || {};

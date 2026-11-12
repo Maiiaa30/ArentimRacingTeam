@@ -44,6 +44,7 @@ header::before{content:"";position:absolute;left:0;top:0;right:0;height:2px;
 .chip.conn.live{color:#5fe08a;border-color:rgba(46,201,107,.45);background:rgba(46,201,107,.08)}
 .chip.conn.stale{color:#ffce45;border-color:rgba(242,182,0,.45);background:rgba(242,182,0,.08)}
 .chip.conn.idle{color:var(--mut);border-color:var(--line2)}
+.chip.conn.lost{color:#ff6a60;border-color:var(--bad);background:rgba(255,59,48,.12);animation:boxpulse 1.2s infinite}
 
 /* ---- layout ---- */
 .wrap{max-width:1360px;width:100%;margin:0 auto;padding:clamp(12px,2vw,20px);
@@ -108,6 +109,22 @@ header::before{content:"";position:absolute;left:0;top:0;right:0;height:2px;
 .box-alert.on{display:flex}
 .box-alert #boxNext{color:#fff}
 @keyframes boxpulse{50%{background:rgba(255,59,48,.30)}}
+
+/* ---- feed-health banner + frozen state ---- */
+.feedbanner{display:none}
+.feedbanner.show{display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.5px;
+  padding:9px 12px;border-radius:10px;cursor:pointer;
+  background:rgba(242,182,0,.12);border:1px solid rgba(242,182,0,.5);color:#ffce45}
+.feedbanner.show.lost{background:rgba(255,59,48,.16);border-color:var(--bad);color:#ff8880;
+  animation:boxpulse 1.4s infinite}
+/* when the feed is dead, the live numbers are frozen — make that unmistakable so
+   nobody acts on a 2-minute-old pit-in countdown */
+body.feed-lost .big3 .val,
+body.feed-lost .strip .v{opacity:.32;filter:grayscale(.6)}
+body.feed-lost .big3 .stat{border-color:rgba(255,59,48,.25)}
+.brain.frozen{border-left-color:#ffce45;opacity:.85}
+.brain.frozen .brain-tag{color:#ffce45}
 
 /* ---- mini-stat strip (race info) ---- */
 .strip{display:grid;grid-template-columns:repeat(8,1fr);gap:clamp(8px,1vw,12px);flex:0 0 auto}
@@ -375,7 +392,12 @@ label.fld{display:flex;justify-content:space-between;align-items:center;gap:10px
   .wrap{flex:0 1 auto}
   .mid{grid-template-columns:1fr;flex:0 1 auto}
   .mid > .panel{overflow:visible}
-  .tbl-scroll{overflow:auto}
+  /* let grid/flex children shrink below their content so a wide table can't
+     drag the whole page wider than the phone (horizontal page scroll). The
+     table gets its OWN horizontal scroll instead. */
+  .wrap, .grid, .mid, .mid > .panel, .rightcol, .rightcol > .panel{min-width:0}
+  .tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .tbl-scroll table{min-width:460px}
 }
 @media(max-width:620px){ .rightcol{grid-template-columns:1fr} }
 /* shorter-than-1080 windows (browser chrome/taskbar): compact to avoid scroll */
