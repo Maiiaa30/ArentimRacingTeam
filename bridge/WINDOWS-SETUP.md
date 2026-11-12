@@ -53,12 +53,19 @@ SUPA_URL=https://cuinegzqahegrxaodosa.supabase.co
 SUPA_ANON=<anon public key>
 SUPA_PASSCODE=<shared write passcode>
 ```
-Save. The bridge loads `.env` automatically, so just run:
+Save. The bridge loads `.env` automatically. Test the pipe once **without the
+game** first — this proves your keys + network before race day:
 ```
-python pitwall_bridge.py --supabase
+python pitwall_bridge.py --demo --supabase
 ```
-(or double-click `start-bridge.bat` if you prefer the launcher).
-Telemetry flows game → Supabase → the pit wall on every device. Close the window to stop.
+Open the pit wall on another device; it should show a synthetic race (our #38
+BMW M4 LMGT3). If it moves, the Supabase side is good. Then for the real run:
+```
+python pitwall_bridge.py --print --supabase
+```
+(`--print` lets you watch the data; or double-click `start-bridge.bat`).
+Telemetry flows game → Supabase → the pit wall on every device. If pushes fail
+the window prints `supabase push FAILING — board is NOT updating`. Close to stop.
 
 ## Driver-swap note
 
@@ -72,6 +79,6 @@ on each PC.
 |---|---|
 | `python` not found | Reinstall Python with "Add to PATH", reopen the terminal |
 | `--print` shows all `null` / errors on shared memory | Plugin not enabled, or game not in a session |
-| `supabase push: FAILED` | Check the 3 values in the .bat; confirm internet |
+| `supabase push FAILING` | Check the 3 values in `.env`/the .bat; confirm internet |
 | `bad passcode` | `SUPA_PASSCODE` must match the team's write passcode exactly |
 | Pit wall not moving | Open its URL fresh; check the status chip says `live · cloud` |

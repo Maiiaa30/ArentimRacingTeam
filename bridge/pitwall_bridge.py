@@ -144,9 +144,12 @@ def _parse_veh(raw):
 def read_state(info):
     """Map LMU shared memory -> the dashboard's state dict (unchanged output shape).
 
-    Field names come from pyLMUSharedMemory (S397 SharedMemoryInterface header).
-    Still best-effort until validated against a live --print; a None value means
-    'not exposed' -> manual entry in the UI. All name/char fields come back as bytes.
+    Field NAMES + access paths validated 2026-11-12 against the vendored
+    pyLMUSharedMemory/lmu_data.py (every field below exists on its struct, so no
+    AttributeError mid-race). VALUES/units still best-effort until a live --print;
+    a None value means 'not exposed' -> manual entry in the UI. Name/char fields
+    come back as bytes. Known value caveats: mWear is life-remaining (inverted to
+    worn below); mBrakeTemp assumed Kelvin though the struct doc says Celsius.
     """
     D = info.LMUData
     pidx = D.telemetry.playerVehicleIdx          # telemetry array index of player
