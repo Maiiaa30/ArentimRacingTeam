@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Arentim Racing Team — Pit Wall</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b0f14'/%3E%3Ctext x='16' y='22' font-size='18' text-anchor='middle' fill='%233ea6ff' font-family='Arial' font-weight='bold'%3EA%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=2026-11-17">
 </head>
 <body>
 <header>
@@ -82,9 +82,8 @@
       <p class="note" id="planSummary"></p>
     </div>
 
-    <!-- status + tires + events -->
-    <div class="grid rightcol">
-      <div class="panel">
+    <!-- status -->
+      <div class="panel statuscol">
         <h2>Status</h2>
         <div class="brain" id="brain"></div>
         <div class="nextstop" id="nextStop"></div>
@@ -112,6 +111,9 @@
         <div class="note" id="psiHint"></div>
         <div class="twheels" id="twheels"></div>
       </div>
+    </div>
+
+    <!-- events / actions — full width below -->
       <div class="panel evpanel">
         <h2>Events <span class="ev-count" id="evCount">0</span>
           <button class="ev-expand" id="evExpand" onclick="openEvents()" title="Full event history">⤢ Log</button>
@@ -132,8 +134,6 @@
         <p class="note">Locks past stints, regenerates the rest of the race.</p>
         <div id="evLog" class="ev-log cscroll"></div>
       </div>
-    </div>
-  </div>
 </div>
 
 <!-- full event history modal -->
@@ -255,13 +255,13 @@
   </div>
 </div>
 
-<script src="js/config.js"></script>
-<script src="js/gate.js"></script>
-<script src="js/engine.js"></script>
+<script src="js/config.js?v=2026-11-17"></script>
+<script src="js/gate.js?v=2026-11-17"></script>
+<script src="js/engine.js?v=2026-11-17"></script>
 <!-- cross-device sync. supabase.config.js = public keys (written at deploy); supabase.local.js = local override w/ passcode. -->
 <script src="supabase.config.js" onerror="void 0"></script>
 <script src="supabase.local.js" onerror="void 0"></script>
-<script src="js/supabase.js"></script>
+<script src="js/supabase.js?v=2026-11-17"></script>
 <script>
 const cfg = window.RACE_CONFIG, wx = window.WEATHER_TIMELINE;
 document.getElementById('target').textContent = cfg.optimize_target.replace('_',' ');
@@ -299,7 +299,7 @@ const DEFAULT_PLAN = JSON.parse(JSON.stringify(Engine.generatePlan(DEFAULT_CFG,
 const $=id=>document.getElementById(id);
 const hms=s=>{s=Math.max(0,s|0);return `${(s/3600|0)}:${String(s/60%60|0).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`};
 const fmtClock=s=>{s=Math.max(0,s|0);return `${(s/60|0)}:${String(s%60).padStart(2,'0')}`};  // M:SS
-const fmtLap=s=>{ if(s==null)return '—'; return s>=60?`${(s/60|0)}:${(s%60).toFixed(3).padStart(6,'0')}`:s.toFixed(3)+'s'; };
+const fmtLap=s=>{ if(s==null)return '—'; const ms=Math.round(s*1000); if(ms<60000) return (ms/1000).toFixed(3)+'s'; const m=Math.floor(ms/60000), sec=(ms-m*60000)/1000; return `${m}:${sec.toFixed(3).padStart(6,'0')}`; };
 
 // measured average lap from the real lap log (recent clean laps). null if none yet.
 function avgLapLive(){
@@ -307,7 +307,11 @@ function avgLapLive(){
   if(!Array.isArray(lapLog) || !lapLog.length) return null;
   const laps = lapLog.map(r=>r.lap_s).filter(v=>v!=null && v>0);
   if(!laps.length) return null;
-  const recent = laps.slice(-5);
+  // drop pit/out-laps and offs: keep only laps within 107% of the best, so the
+  // average reflects real pace (not a stop-inflated number).
+  const best = Math.min(...laps);
+  const clean = laps.filter(v=> v <= best*1.07);
+  const recent = (clean.length ? clean : laps).slice(-5);
   return recent.reduce((a,b)=>a+b,0)/recent.length;
 }
 
@@ -684,7 +688,7 @@ function renderStandings(){
         const gap=r.is_us?'—':(r.gap_s!=null?('+'+(+r.gap_s).toFixed(1)):'—');
         let intv='—', intvNum=null;
         if(ci===0) intv='LDR';
-        else if(r.gap_s!=null && prevGap!=null){ intvNum=r.gap_s-prevGap; intv='+'+intvNum.toFixed(1); }
+        else if(r.gap_s!=null && prevGap!=null){ intvNum=r.gap_s-prevGap; intv=(intvNum<0?'':'+')+intvNum.toFixed(1); }
         if(r.gap_s!=null) prevGap=r.gap_s;
         const pit=r.in_pits?'<span class="tag-pit">PIT</span>':'';
         const sub=[team,driver].filter(Boolean).join(' · ');
@@ -696,8 +700,8 @@ function renderStandings(){
         list+=`<div class="srow${us}${battle}">`+
           `<div class="srk"><b>${ci+1}</b><i>P${r.pos??'—'}</i></div>`+
           `${badgeHtml(mf)}`+
-          `<div class="scar"><div class="scar-nm">${title} ${pit}</div>`+
-            `<div class="scar-sub">${sub||'—'}</div></div>`+
+          `<div class="scar"><div class="scar-nm">${_esc(title)} ${pit}</div>`+
+            `<div class="scar-sub">${_esc(sub||'—')}</div></div>`+
           `<div class="sstats">`+
             `<div class="sst"><span>GAP</span><b>${gap}</b></div>`+
             `<div class="sst"><span>INT</span><b class="${intv==='LDR'?'lead':''}${battle?' hot':''}">${intv}</b></div>`+
@@ -762,9 +766,10 @@ function render(){
       wxd.className = 'chip wetpct' + (wc.delta>0.02?' up':wc.delta<-0.02?' down':'');
     }
   }
+  const haveFuel = state.fuel_now!=null;   // without a fuel feed, pit_in reads 0 — don't alarm
   $('fuelLaps').textContent = m.fuel_laps_left;
   $('pitIn').textContent = m.pit_in_laps;
-  $('pitTile').className = 'panel stat'+(m.pit_in_laps<=1?' crit':m.pit_in_laps<=3?' hot':'');
+  $('pitTile').className = 'panel stat'+(!haveFuel?'':m.pit_in_laps<=1?' crit':m.pit_in_laps<=3?' hot':'');
   // say WHY the window is where it is: VE forces the stop before fuel on LMGT3
   $('pitSub').innerHTML = m.ve_limited
     ? 'VE-limited'+(m.energy_laps_left!=null?' · '+m.energy_laps_left+' laps VE':'')
@@ -772,7 +777,6 @@ function render(){
   const stintLap = Math.max(0, state.laps_done - (active?active.in_lap:0));
   $('stint').textContent = stintLap; $('stintSub').textContent = 'target '+(active?.target_laps??'—');
   const realFpl = measuredFuelPerLap();
-  const haveFuel = state.fuel_now!=null;
   $('fuelSub').textContent = (haveFuel ? state.fuel_now.toFixed(1)+' L' : '—')
     + (realFpl!=null ? ' · '+realFpl.toFixed(2)+' L/lap' : '')
     + (state.virtual_energy!=null ? ' · VE '+Math.round(state.virtual_energy*100)+'%' : '')
@@ -851,7 +855,7 @@ function render(){
       sl.className = 'v' + (left<120 ? ' warn' : '');
     }
   }
-  const boxOn = m.pit_in_laps <= 2 && !state.in_pits;
+  const boxOn = haveFuel && m.pit_in_laps <= 2 && !state.in_pits;
   $('boxAlert').classList.toggle('on', boxOn);
   $('boxNext').textContent = nextStint ? nextStint.driver : 'same driver';
   window._boxState = boxOn;   // visual BOX banner only — no sound
@@ -1193,7 +1197,7 @@ function renderDamage(){
   const rec = Engine.repairDecision(cfg, state, penalty, lapsRem, {pitting_anyway:pittingAnyway});
 
   // LMU-style: damage = color-coded list (Aero/Body/Susp/Tyres/Repair) + tyre grid. No car drawing.
-  const pc=v=> v>=(cfg.damage.severe_pct??20) ? 'bad' : v>0 ? 'warn' : 'ok';
+  const pc=v=> v>=(cfg.damage?.severe_pct??20) ? 'bad' : v>0 ? 'warn' : 'ok';
   const drow=(k,v,unit='%')=>`<div class="dmg-row"><span>${k}</span><span class="dv ${v==='--'?'':pc(v)}">${v}${v==='--'?'':unit}</span></div>`;
   const c=dsum.cats;
   // overall damage = mean of the four categories; condition = inverse
@@ -1207,11 +1211,12 @@ function renderDamage(){
 
   const wn=['FL','FR','RL','RR'];
   const tcol=w=> (w.flat||w.detached)?'bad' : w.wear>=0.6?'warn' : 'ok';
-  const tyres=`<div class="tyre-grid">`+state.wheels.map((w,i)=>
+  const tyres=`<div class="tyre-grid">`+(state.wheels||[]).map((w,i)=>
     `<div class="tyre"><span class="tbar ${tcol(w)}"></span><div><div class="tn">${wn[i]}`+
     `${w.flat?' · FLAT':''}${w.detached?' · OFF':''}</div>`+
-    `<div class="tv">${Math.round(w.wear*100)}% wear · ${Math.round(w.brakeTemp)}°C`+
-    `${w.temp?' · '+Math.round(w.temp)+'°':''}${w.press?' · '+Math.round(w.press)+'kPa':''}</div></div></div>`).join('')+`</div>`;
+    `<div class="tv">${Math.round((w.wear||0)*100)}% wear`+
+    `${w.brakeTemp!=null?' · brake '+Math.round(w.brakeTemp)+'°C':''}`+
+    `${w.temp!=null?' · '+Math.round(w.temp)+'°':''}${w.press!=null?' · '+Math.round(w.press)+'kPa':''}</div></div></div>`).join('')+`</div>`;
 
   $('dmgDetails').innerHTML=
     `<div class="cond-head">Car condition <b class="${condCls}">${condition}%</b>`+
@@ -1239,9 +1244,20 @@ function curState(){
            tires_used:state.tires_used||0, driver_idx:state.driver_idx };
 }
 function lockedStints(){
-  // lock stints that started BEFORE this lap; the stint at/after now is rebuilt from current state
-  const locked = currentPlan.stints.filter(s=> s.in_lap < state.laps_done).map(s=>({...s}));
-  locked.forEach(s=> s.status = 'done');
+  // Lock every stint that has STARTED (in_lap < now) — including the one being
+  // driven — and keep it whole. Attach its scheduled end lap/time so regenerate
+  // continues the tail AFTER the active stint instead of injecting a phantom
+  // stop at the current lap.
+  const stints = currentPlan.stints;
+  const locked = [];
+  stints.forEach((s,i)=>{
+    if(s.in_lap < state.laps_done){
+      const next = stints[i+1];
+      locked.push({...s, status:'done',
+        end_lap: s.in_lap + (s.target_laps||0),
+        end_time_s: next ? next.in_time_s : currentPlan.finish_time_s });
+    }
+  });
   return locked;
 }
 // live weather timeline: the configured forecast, but with the CURRENT segment
@@ -1258,13 +1274,25 @@ function liveWxTimeline(){
   }
   return tl;
 }
-function regen(){ currentPlan = Engine.regenerate(cfg, liveWxTimeline(), curState(), lockedStints()); }
+function regen(){ currentPlan = Engine.regenerate(cfg, liveWxTimeline(), curState(), lockedStints()); _brainSig = null; }
 
 // ---- Strategy Brain: offline optimizer, surfaced as a live card ----
 // Runs every render (cheap, pure math). From the live state it scores several
 // rest-of-race plans and, if a different line beats holding, offers one-tap Apply.
-let _brain = null, _brainOpen = false;
-function runBrain(){
+let _brain = null, _brainOpen = false, _brainSig = null;
+// optimize() runs several regenerate() passes — too heavy to redo on every
+// sub-second telemetry push. The result only changes per lap / weather flip /
+// meaningful fuel move / plan or config change, so recompute only then; otherwise
+// just re-render the cached line. Pass force=true (or null the sig) to override.
+function brainSig(){
+  return [state.laps_done, state.weather_now, currentPlan && currentPlan.stints.length,
+    state.fuel_now==null?-1:Math.round(state.fuel_now/2),
+    cfg.optimize_target, cfg.avg_lap_s, cfg.tire_budget].join('|');
+}
+function runBrain(force){
+  const sig = brainSig();
+  if(!force && sig===_brainSig && _brain){ renderBrain(); return; }
+  _brainSig = sig;
   try {
     _brain = Engine.optimize(cfg, liveWxTimeline(), curState(), lockedStints(), { fuel_now: state.fuel_now });
   } catch(e){ _brain = null; }
@@ -1317,6 +1345,7 @@ function _applyCand(c){
   currentPlan = c.plan;
   logEvent('Brain → '+c.label);
   _brainOpen = false;
+  _brainSig = null;   // config/plan changed — force a fresh brain next render
   render();
 }
 function applyBrain(){ if(_brain) _applyCand(_brain.best); }
@@ -1372,6 +1401,10 @@ function closeFuel(){ $('fuelModal').classList.remove('open'); }
 function renderFuel(){
   const fpl = cfg.fuel_per_lap;
   const lpt = Math.floor(cfg.tank_cap / fpl) - cfg.fuel_margin_laps;
+  if(state.fuel_now==null){
+    $('fuelBody').innerHTML = `<p class="note">No live fuel feed yet — start the bridge (or a session) to see fuel-save numbers. Planning uses ${fpl.toFixed(2)} L/lap, ${lpt} laps/tank.</p>`;
+    return;
+  }
   const lapsFuelNow = state.fuel_now / fpl;
   const R = currentPlan.total_laps - state.laps_done;
   const futureStops = currentPlan.stints.filter(s=> s.in_lap > state.laps_done).length;
@@ -1512,7 +1545,7 @@ function renderLapLog(){
   const rows = lapLog.slice().reverse().map(r=>{
     const purple = (r.lap_s!=null && r.lap_s===best) ? ' class="best"' : '';
     return `<tr><td>${r.lap}</td><td${purple}>${r.lap_s!=null?fmtLap(r.lap_s):'—'}</td>`+
-      `<td>${r.driver}</td><td>${r.fuel!=null?r.fuel.toFixed(1)+'L':'—'}</td>`+
+      `<td>${_esc(r.driver)}</td><td>${r.fuel!=null?r.fuel.toFixed(1)+'L':'—'}</td>`+
       `<td>${r.tire_laps!=null?r.tire_laps:'—'}</td><td>${r.pos!=null?'P'+r.pos:'—'}</td><td>${r.wx}</td></tr>`;
   }).join('');
   $('lapBody').innerHTML = `<table class="laptbl"><thead><tr><th>Lap</th><th>Time</th><th>Driver</th>`+
@@ -1641,7 +1674,7 @@ function renderDrivers(){
     if(allStints.length){
       const srows = allStints.map((s,i)=>{
         const done = !(_curStint && i===allStints.length-1);
-        return `<tr><td>${i+1}${done?'':' <span class="dim">(live)</span>'}</td><td>${s.driver||'—'}</td>`+
+        return `<tr><td>${i+1}${done?'':' <span class="dim">(live)</span>'}</td><td>${_esc(s.driver||'—')}</td>`+
           `<td>${s.laps||0}</td><td>${s.bestLap!=null?fmtLap(s.bestLap):'—'}</td>`+
           `<td>${s.tyreLifeEnd!=null?s.tyreLifeEnd+'%':'—'}</td>`+
           `<td class="${s.contacts>0?'bad':''}">${s.contacts||0}</td>`+
@@ -1663,7 +1696,7 @@ function openDrivers(){ renderDrivers(); $('drvModal').classList.add('open'); }
 function closeDrivers(){ $('drvModal').classList.remove('open'); }
 
 // ---- race setup panel (edit config from the UI, persist to localStorage) ----
-const _esc = s => String(s).replace(/"/g,'&quot;').replace(/</g,'&lt;');
+const _esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 function renderSetup(){
   const tl = cfg.tire_life_laps;
   const dn = (cfg.driver_names && cfg.driver_names.length) ? cfg.driver_names : window.DRIVERS;
@@ -1689,14 +1722,21 @@ function renderSetup(){
 }
 function saveSetup(){
   const g = id => $('su_'+id);
-  const names = [0,1,2,3].map(i => (g('drv'+i).value.trim() || ('D'+(i+1))));
+  // build names from however many driver inputs renderSetup emitted (not a fixed 4)
+  const names = [];
+  for(let i=0; g('drv'+i); i++) names.push(g('drv'+i).value.trim() || ('D'+(i+1)));
+  if(!names.length) names.push('D1');
+  // a value that must be strictly positive — a 0 or blank here divides by zero in
+  // the engine (and can spin the stint loop), so fall back to the current config.
+  const pos = (id,fallback)=>{ const v=+g(id).value; return (isFinite(v)&&v>0)?v:fallback; };
+  const nonneg = (id,fallback)=>{ const v=+g(id).value; return (isFinite(v)&&v>=0)?v:fallback; };
   const ov = {
-    duration_s: Math.round((+g('duration_h').value || 6) * 3600),
-    avg_lap_s: +g('avg_lap_s').value, fuel_per_lap: +g('fuel_per_lap').value,
-    tank_cap: +g('tank_cap').value, fuel_margin_laps: +g('fuel_margin_laps').value,
-    tire_budget: +g('tire_budget').value, pit_loss_s: +g('pit_loss_s').value,
-    wet_lap_factor: +g('wet_lap_factor').value,
-    tire_life_laps: { soft:+g('tl_soft').value, med:+g('tl_med').value, hard:+g('tl_hard').value, wet:+g('tl_wet').value },
+    duration_s: Math.round(pos('duration_h', cfg.duration_s/3600) * 3600),
+    avg_lap_s: pos('avg_lap_s', cfg.avg_lap_s), fuel_per_lap: pos('fuel_per_lap', cfg.fuel_per_lap),
+    tank_cap: pos('tank_cap', cfg.tank_cap), fuel_margin_laps: nonneg('fuel_margin_laps', cfg.fuel_margin_laps),
+    tire_budget: pos('tire_budget', cfg.tire_budget), pit_loss_s: nonneg('pit_loss_s', cfg.pit_loss_s),
+    wet_lap_factor: pos('wet_lap_factor', cfg.wet_lap_factor),
+    tire_life_laps: { soft:pos('tl_soft',cfg.tire_life_laps.soft), med:pos('tl_med',cfg.tire_life_laps.med), hard:pos('tl_hard',cfg.tire_life_laps.hard), wet:pos('tl_wet',cfg.tire_life_laps.wet) },
     optimize_target: g('optimize_target').value,
     access_passcode: g('access').value,
     driver_names: names
@@ -1708,6 +1748,7 @@ function saveSetup(){
   cfg.driver_names = names.slice(); window.DRIVERS = names.slice();
   $('target').textContent = cfg.optimize_target.replace('_',' ');
   currentPlan = Engine.generatePlan(cfg, wx);
+  _brainSig = null;   // setup changed the config — force a fresh brain
   render();
   closeSetup();
 }

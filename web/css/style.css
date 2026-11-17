@@ -54,17 +54,19 @@ header::before{content:"";position:absolute;left:0;top:0;right:0;height:2px;
   flex:1;min-height:0;display:flex;flex-direction:column;gap:clamp(10px,1.5vw,16px)}
 .grid{display:grid;gap:clamp(10px,1.5vw,16px)}
 .big3{grid-template-columns:repeat(3,1fr);flex:0 0 auto}
-.mid{grid-template-columns:1.7fr 1.05fr;flex:1;min-height:0;align-items:stretch}
-/* strategy card fills the mid row; its table absorbs the spare height (no app scroll) */
-.strat{display:flex;flex-direction:column;min-height:0}
-.strat .tbl-scroll{flex:1 1 auto;max-height:none;min-height:0}
-/* stretch the plan rows to fill the spare card height instead of leaving a gap */
-.strat .tbl-scroll > table{height:100%}
-/* status/tires take their natural height; the events panel fills the rest of
-   the column so its log uses the spare space instead of leaving it blank */
-.rightcol{grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr;min-height:0}
-.rightcol .evpanel{grid-column:1 / -1;display:flex;flex-direction:column;min-height:0}
-.evpanel .ev-log{flex:1 1 auto;min-height:0;max-height:none}
+/* three columns: strategy (wide) | status | tires. Columns size to content and
+   align to the top so a short strategy table doesn't leave a tall void. */
+.mid{grid-template-columns:1.55fr 1.15fr 1fr;align-items:start}
+.strat{display:flex;flex-direction:column}
+/* strategy table shows its rows at natural height; scrolls internally only if
+   the plan is unusually long */
+.strat .tbl-scroll{max-height:62vh;overflow:auto}
+/* events + actions span the full width below the mid row */
+.evpanel{display:flex;flex-direction:column}
+.evpanel .ev-log{min-height:80px;max-height:240px;overflow:auto}
+/* keep the legacy rightcol rule harmless if referenced elsewhere */
+.rightcol{grid-template-columns:1fr 1fr}
+@media(max-width:1180px){ .mid{grid-template-columns:1fr 1fr} .strat{grid-column:1 / -1} }
 
 /* ---- weather timeline strip ---- */
 .wx-strip{display:flex;align-items:center;gap:12px;flex:0 0 auto}

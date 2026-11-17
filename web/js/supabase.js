@@ -44,11 +44,24 @@ window.PitDB = (() => {
 
   // Dedupe by updated_at so the realtime push and the poll fallback below never
   // double-fire for the same state.
-  let _lastStamp = null;
+  let _lastStamp = null, _lastStampMs = -1;
+  const stampMs = s => {
+    if(s==null) return null;
+    if(typeof s==='number') return s;
+    const t = Date.parse(s); return isNaN(t) ? null : t;
+  };
   function emit(data){
     if(!data) return;
     const stamp = data.updated_at || data._t || null;
-    if(stamp && stamp === _lastStamp) return;
+    const ms = stampMs(stamp);
+    if(ms!=null){
+      // realtime and the 3s poll can deliver out of order; never let an older
+      // snapshot overwrite a newer one (board rollback), and skip exact dupes.
+      if(ms <= _lastStampMs) return;
+      _lastStampMs = ms;
+    } else if(stamp && stamp === _lastStamp){
+      return;   // non-numeric stamp: best-effort dedupe only
+    }
     _lastStamp = stamp;
     subscribers.forEach(cb => { try { cb(data); } catch(_){} });
   }
@@ -90,7 +103,10 @@ window.PitDB = (() => {
       // Safety-net poll: if realtime isn't enabled on the table (common), the board
       // still updates on its own without a page refresh. Dedupe (emit) skips the
       // overlap when realtime IS working. 3s ≈ live enough for a 6h race, tiny load.
+      let _polling = false;
       setInterval(async () => {
+        if(_polling) return;           // don't stack queries if one is slow/hung
+        _polling = true;
         try {
           const { data, error } = await client
             .from('race_state').select('data, updated_at').eq('id', 1).single();
@@ -99,12 +115,12 @@ window.PitDB = (() => {
             if(data.updated_at && !d.updated_at) d.updated_at = data.updated_at;
             emit(d);
           }
-        } catch(_){}
+        } catch(_){} finally { _polling = false; }
       }, 3000);
 
       ready = true;
       // flush anything pushed before we connected (keep only the latest)
-      if(pushQueue.length){ const last = pushQueue.pop(); pushQueue.length = 0; doPush(last); }
+      if(pushQueue.length){ const last = pushQueue[pushQueue.length-1]; pushQueue.length = 0; doPush(last); }
     } catch(err){
       console.warn('PitDB: Supabase unavailable, falling back to localStorage —', err && err.message);
       failed = true;
@@ -129,7 +145,8 @@ window.PitDB = (() => {
     init(){ return connecting; },
     pushState(obj){
       if(failed) return local.push(obj);
-      if(!ready){ pushQueue.push(obj); return; }
+      // only the latest state matters — never let the pre-connect queue grow
+      if(!ready){ pushQueue.length = 0; pushQueue.push(obj); return; }
       doPush(obj);
     },
     onState(cb){

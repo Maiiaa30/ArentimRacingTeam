@@ -26,6 +26,9 @@ const Engine = (() => {
 
   // Rough total race laps (time-based race; last lap crosses the flag).
   function estTotalLaps(cfg, weather) {
+    // Guard against a bad config (0/NaN lap time) that would otherwise spin the
+    // lap-counting loop to its 100k cap.
+    if (!(cfg.avg_lap_s > 0) || !(cfg.duration_s > 0)) return 1;
     // Time-based race: count laps that actually fit in the duration after both
     // pit-stop time AND the slower wet pace. Estimate stops from fuel range,
     // subtract their time, then walk the weather timeline lap by lap.
@@ -132,6 +135,12 @@ const Engine = (() => {
       if (last.target_laps < TAIL_MIN && prev.target_laps + last.target_laps <= cap) {
         prev.target_laps += last.target_laps;
         if (last.tire_action === "new") usedTires -= perChange;
+        // recompute the merged stint's fuel load for its new length, and drop the
+        // pit stop we just removed from the finish time.
+        const condP = conditionAt(weather, prev.in_time_s);
+        const fplP = lapFuelAt(cfg, condP);
+        prev.fuel_load = Math.min(cfg.tank_cap, prev.target_laps * fplP + (cfg.fuel_margin_laps || 0) * fplP);
+        elapsed -= cfg.pit_loss_s;
         stints.pop();
       }
     }
@@ -212,20 +221,35 @@ const Engine = (() => {
   // ---- layer 3: regenerate remainder ----
   // lock done/active stints, rebuild the rest from current real state.
   function regenerate(cfg, weather, currentState, lockedStints) {
-    const tail = generatePlan(cfg, weather, {
+    const locked = lockedStints || [];
+    const start = {
       lap: currentState.laps_done,
       elapsed_s: currentState.elapsed_s,
       fuel_now: currentState.fuel_now,
       tires_used: currentState.tires_used,
       driver_idx: currentState.driver_idx
-    });
+    };
+    // If the last locked stint is the one being driven (its scheduled end is
+    // still ahead of the current lap), anchor the tail at THAT end — not at the
+    // current lap — so we don't create a phantom pit stop mid-stint. Rotation and
+    // time pick up where the active stint leaves off.
+    if (locked.length) {
+      const last = locked[locked.length - 1];
+      const lastEnd = (last.end_lap != null) ? last.end_lap : (last.in_lap + (last.target_laps || 0));
+      if (lastEnd > start.lap) {
+        start.lap = lastEnd;
+        if (last.end_time_s != null) start.elapsed_s = last.end_time_s;
+        start.driver_idx = locked.length;   // next stint in the rotation
+      }
+    }
+    const tail = generatePlan(cfg, weather, start);
     // reindex tail after locked stints
-    const base = (lockedStints || []).length;
+    const base = locked.length;
     tail.stints.forEach((s, i) => { s.idx = base + i; });
     return {
-      stints: [...(lockedStints || []), ...tail.stints],
+      stints: [...locked, ...tail.stints],
       total_laps: tail.total_laps,
-      stops: Math.max(0, (lockedStints || []).length + tail.stints.length - 1),
+      stops: Math.max(0, locked.length + tail.stints.length - 1),
       tires_used: currentState.tires_used + tail.tires_used,
       tires_over_budget: (currentState.tires_used + tail.tires_used) > cfg.tire_budget,
       finish_time_s: tail.finish_time_s
