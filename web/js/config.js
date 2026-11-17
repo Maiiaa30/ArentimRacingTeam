@@ -71,6 +71,13 @@ window.RACE_CONFIG = {
   // the cold set by ~psi_per_degC per +1°C to land in the same hot window.
   ref_track_temp_c: 30,
   psi_per_degC: 0.1,
+  // tyre working-temp window (°C surface) — grid cell goes blue below low, red
+  // above high, green inside. GT3 slick window is roughly 75-105°C; tune on data.
+  tyre_temp_window: { low: 75, high: 105 },
+  // worn fraction at which we'd box on tyre condition (0.85 = 85% worn / 15%
+  // life). The dynamic "laps of life left" estimate projects the measured wear
+  // rate to this point, not to fully dead rubber.
+  tyre_pit_worn: 0.85,
 
   // --- weather ---
   wet_lap_factor: 1.12,        // wet lap time = dry * this (PLACEHOLDER)

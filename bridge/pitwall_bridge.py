@@ -346,6 +346,8 @@ def read_state(info):
         "wheels": wheels or None,
         "flag": flag,
         "weather_now": weather_now,
+        "wetness": round(wetness, 3) if wetness is not None else None,   # 0..1 avg path wetness
+        "raining": round(raining, 3) if raining is not None else None,   # 0..1 rain severity
         "track_temp": track_temp,
         "air_temp": air_temp,
         "session_remaining_s": session_remaining,
@@ -393,6 +395,8 @@ def demo_state(tick):
         "stint_lap": (tick % 96) // 4,
         "elapsed_s": tick * 24,
         "weather_now": "wet" if wet else "dry",
+        "wetness": round(0.6 if wet else 0.0, 3),
+        "raining": round(0.5 if wet else 0.0, 3),
         # real driver blocks (Francisco starts, then Rui, Helder, Diogo) so the
         # demo mirrors race day — this is the pre-race pipeline test, not a toy.
         "current_driver": ["Francisco Coelho", "Rui Garcia", "Helder Marques", "Diogo Rodrigues"][(lap // 23) % 4],

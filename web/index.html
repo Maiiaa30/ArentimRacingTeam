@@ -15,6 +15,7 @@
   <span class="chip conn" id="conn" title="data link">● —</span>
   <span class="chip clock" id="clock" title="time remaining">--:--:--</span>
   <span class="chip wet" id="wx">DRY</span>
+  <span class="chip wetpct" id="wxDetail" title="track wetness + trend" style="display:none"></span>
   <span class="chip tgt" id="target">fewest stops</span>
   <button class="chip btn" onclick="openSetup()" title="Race setup — enter real values">⚙ Setup</button>
 </header>
@@ -41,6 +42,15 @@
     <div class="mini"><span class="k">Last pit (lap)</span><span class="v" id="lastPit">—</span></div>
     <div class="mini clickable" onclick="openDamage()" title="Click for damage detail"><span class="k">Damage ▸</span><span class="v" id="damage">—</span></div>
     <div class="mini"><span class="k">Penalties</span><span class="v" id="pen">—</span></div>
+  </div>
+
+  <!-- class-relative strip (multiclass: our GT3 fight) -->
+  <div class="strip clsrel" id="clsRelStrip" style="display:none">
+    <div class="mini"><span class="k">Class pos</span><span class="v" id="clsPos">—</span></div>
+    <div class="mini clsrow"><span class="k">Class ahead</span><span class="v" id="clsAhead">—</span></div>
+    <div class="mini clsrow"><span class="k">Class behind</span><span class="v" id="clsBehind">—</span></div>
+    <div class="mini"><span class="k">Class best</span><span class="v" id="clsBest">—</span></div>
+    <div class="mini clickable" onclick="openStandings()" title="Full timing tower"><span class="k">Standings ▸</span><span class="v" id="clsField">—</span></div>
   </div>
 
   <!-- weather timeline -->
@@ -268,6 +278,7 @@ let state = { fuel_now:null, fuel_capacity:null, laps_done:0, stint_lap:0, avg_l
   penalties:0, tire_wear_pct:null, laps_on_tires:null,
   // real-telemetry fields (sim feeder / bridge fed)
   flag:'green', in_pits:false, session_remaining_s:null, weather_now:'dry',
+  wetness:null, raining:null,
   track_temp:null, air_temp:null, sectors:null, lap_delta_s:null,
   cls_position:null, rivals:[],
   // damage: derived from real LMU signals on the bridge; null where unmeasurable
@@ -307,6 +318,20 @@ function measuredFuelPerLap(){
   for(let i=1;i<lapLog.length;i++){
     const a=lapLog[i-1].fuel, b=lapLog[i].fuel;
     if(a!=null && b!=null){ const d=a-b; if(d>0 && d<30) drops.push(d); }
+  }
+  if(!drops.length) return null;
+  const last=drops.slice(-5);
+  return last.reduce((x,y)=>x+y,0)/last.length;
+}
+// live tyre wear rate (worn fraction per lap) from the recent lap stream — like
+// VE drain but for rubber. Resets implicitly each stint (worn drops to ~0 on
+// fresh tyres → negative deltas filtered out). null until 2 laps on a set.
+function measuredWearPerLap(){
+  if(!Array.isArray(lapLog) || lapLog.length<2) return null;
+  const drops=[];
+  for(let i=1;i<lapLog.length;i++){
+    const a=lapLog[i-1].worn, b=lapLog[i].worn;
+    if(a!=null && b!=null){ const d=b-a; if(d>0 && d<0.2) drops.push(d); }  // ignore resets/noise
   }
   if(!drops.length) return null;
   const last=drops.slice(-5);
@@ -372,6 +397,22 @@ function engineerCall(m, veRate, fplMeasured){
     detail = '±'+Math.abs(b.margin).toFixed(1)+' lap';
   }
   return { verb, detail, cls, unit:b.unit };
+}
+
+// ---- Refuel calculator: exactly what to dial in at the next stop ---------
+// BlackRack-style: the fuel (L) to add for the upcoming stint, flagged with a
+// data-confidence note when we don't yet have measured consumption. VE always
+// refills to 100% on an LMGT3 so the energy side is a fixed note.
+function refuelCalc(nextStint){
+  if(!nextStint) return null;
+  const fplM = measuredFuelPerLap();
+  const fpl = (fplM && fplM>0) ? fplM : cfg.fuel_per_lap;
+  const laps = nextStint.target_laps || cfg.max_stint_laps || 0;
+  const cap = (state.fuel_capacity && state.fuel_capacity>0) ? state.fuel_capacity : (cfg.tank_cap||999);
+  const addL = Math.min(cap, laps*fpl + (cfg.fuel_margin_laps||0)*fpl);
+  const confident = fplM!=null;
+  const needLaps = confident ? 0 : Math.max(1, 2 - (Array.isArray(lapLog)?lapLog.length:0));
+  return { addL, laps, fpl, confident, needLaps, ve: cfg.energy_mode==='ve' };
 }
 
 // ---- Stint pace trend: are the tyres going off? --------------------------
@@ -494,6 +535,19 @@ function pushTemp(){
   if(!last || now-last.ts > 20000){ _tempLog.push({ts:now, track:state.track_temp}); }
   if(_tempLog.length > 40) _tempLog.shift();
 }
+// ---- Track wetness % + drying/wetting trend ------------------------------
+let _wetLog = [];   // ring of {ts, wet} to read a trend over ~2 min
+function wetnessCalc(){
+  if(state.wetness==null && state.raining==null) return null;
+  const wet = state.wetness!=null ? state.wetness : 0;
+  const now = Date.now();
+  const last = _wetLog[_wetLog.length-1];
+  if(!last || now-last.ts > 10000){ _wetLog.push({ts:now, wet}); if(_wetLog.length>30) _wetLog.shift(); }
+  const old = _wetLog.find(e=> now-e.ts <= 150000 && now-e.ts >= 60000);
+  const delta = old ? wet-old.wet : 0;
+  const arrow = delta > 0.02 ? '↑ wetting' : delta < -0.02 ? '↓ drying' : 'steady';
+  return { pct: Math.round(wet*100), raining: state.raining, arrow, delta };
+}
 function tempTrendCalc(){
   if(state.track_temp==null) return null;
   pushTemp();
@@ -511,6 +565,44 @@ function tempTrendCalc(){
 function incidentCost(contacts, offtracks){
   const c = cfg.incident_cost || {contact_s:4, offtrack_s:1};
   return (contacts||0)*(c.contact_s||0) + (offtracks||0)*(c.offtrack_s||0);
+}
+
+// ---- Class-relative + broadcast timing helpers ---------------------------
+// From the rivals feed, find OUR car, our class, and the car ahead/behind us
+// WITHIN OUR CLASS (multiclass: the GT3 fight is what matters to us, not the
+// LMP/Hypercar traffic). Intervals from each car's gap-to-leader.
+function classRelativeCalc(){
+  const rivals = Array.isArray(state.rivals) ? state.rivals : [];
+  if(!rivals.length) return null;
+  const us = rivals.find(r=>r.is_us);
+  if(!us) return null;
+  const myCls = classMeta(us.cls).name;
+  const mates = rivals.filter(r=> classMeta(r.cls).name===myCls);
+  // sort by gap-to-leader (fallback to position) ascending = track order in class
+  const key = r => (r.gap_s!=null ? +r.gap_s : (r.pos!=null ? r.pos*1e6 : 1e12));
+  mates.sort((a,b)=> key(a)-key(b));
+  const myIdx = mates.findIndex(r=>r.is_us);
+  const clsPos = myIdx>=0 ? myIdx+1 : null;
+  const ahead = myIdx>0 ? mates[myIdx-1] : null;
+  const behind = (myIdx>=0 && myIdx<mates.length-1) ? mates[myIdx+1] : null;
+  const intv = (o)=> (o && o.gap_s!=null && us.gap_s!=null) ? Math.abs(us.gap_s - o.gap_s) : null;
+  // class best lap across all mates
+  let clsBest=null; mates.forEach(r=>{ if(r.best_lap_s!=null && (clsBest==null||r.best_lap_s<clsBest)) clsBest=r.best_lap_s; });
+  const label = o => o ? ((o.num?('#'+o.num+' '):'')+(o.driver||o.manuf||o.name||'car')).trim() : null;
+  return { clsPos, clsCount: mates.length, clsName: myCls,
+    ahead: ahead?{name:label(ahead), intv:intv(ahead), pit:ahead.in_pits}:null,
+    behind: behind?{name:label(behind), intv:intv(behind), pit:behind.in_pits}:null,
+    clsBest };
+}
+// session fastest lap (overall + per class) for the purple marker
+function fastestLaps(){
+  const rivals = Array.isArray(state.rivals) ? state.rivals : [];
+  let overall=null; const byCls={};
+  rivals.forEach(r=>{ if(r.best_lap_s!=null){
+    if(overall==null||r.best_lap_s<overall) overall=r.best_lap_s;
+    const c=classMeta(r.cls).name; if(byCls[c]==null||r.best_lap_s<byCls[c]) byCls[c]=r.best_lap_s;
+  }});
+  return { overall, byCls };
 }
 
 // standings / sectors modal
@@ -577,6 +669,7 @@ function renderStandings(){
       return (ia<0?99:ia)-(ib<0?99:ib);
     });
     const en=v=>v!=null?Math.round(v)+'%':'—';
+    const fl=fastestLaps();      // session fastest overall + per class (purple/green)
     let cols='';
     names.forEach(nm=>{
       const m=classMeta(nm);
@@ -589,22 +682,27 @@ function renderStandings(){
         const team=r.team||'';
         const driver=r.is_us ? (r.driver||state.current_driver||'—') : (r.driver||'—');
         const gap=r.is_us?'—':(r.gap_s!=null?('+'+(+r.gap_s).toFixed(1)):'—');
-        let intv='—';
+        let intv='—', intvNum=null;
         if(ci===0) intv='LDR';
-        else if(!r.is_us && r.gap_s!=null && prevGap!=null) intv='+'+(r.gap_s-prevGap).toFixed(1);
-        if(!r.is_us && r.gap_s!=null) prevGap=r.gap_s;
+        else if(r.gap_s!=null && prevGap!=null){ intvNum=r.gap_s-prevGap; intv='+'+intvNum.toFixed(1); }
+        if(r.gap_s!=null) prevGap=r.gap_s;
         const pit=r.in_pits?'<span class="tag-pit">PIT</span>':'';
         const sub=[team,driver].filter(Boolean).join(' · ');
-        list+=`<div class="srow${us}">`+
+        // broadcast touches: fastest-lap purple (overall) / green (class best),
+        // battle highlight when the interval to the car ahead is under 1s.
+        const flCls = (r.best_lap_s!=null && r.best_lap_s===fl.overall) ? 'best fl-o'
+                    : (r.best_lap_s!=null && r.best_lap_s===fl.byCls[nm]) ? 'best fl-c' : '';
+        const battle = (intvNum!=null && Math.abs(intvNum)<1.0) ? ' battle' : '';
+        list+=`<div class="srow${us}${battle}">`+
           `<div class="srk"><b>${ci+1}</b><i>P${r.pos??'—'}</i></div>`+
           `${badgeHtml(mf)}`+
           `<div class="scar"><div class="scar-nm">${title} ${pit}</div>`+
             `<div class="scar-sub">${sub||'—'}</div></div>`+
           `<div class="sstats">`+
             `<div class="sst"><span>GAP</span><b>${gap}</b></div>`+
-            `<div class="sst"><span>INT</span><b class="${intv==='LDR'?'lead':''}">${intv}</b></div>`+
+            `<div class="sst"><span>INT</span><b class="${intv==='LDR'?'lead':''}${battle?' hot':''}">${intv}</b></div>`+
             `<div class="sst"><span>LAST</span><b>${r.last_lap_s!=null?fmtLap(+r.last_lap_s):'—'}</b></div>`+
-            `<div class="sst"><span>BEST</span><b class="best">${r.best_lap_s!=null?fmtLap(+r.best_lap_s):'—'}</b></div>`+
+            `<div class="sst"><span>BEST</span><b class="${flCls}">${r.best_lap_s!=null?fmtLap(+r.best_lap_s):'—'}</b></div>`+
             `<div class="sst"><span>LAPS</span><b>${r.laps!=null?r.laps:'—'}</b></div>`+
             `<div class="sst"><span>FUEL/E</span><b>${en(r.fuel_pct)}</b></div>`+
           `</div></div>`;
@@ -653,6 +751,17 @@ function render(){
   const liveWx = state.weather_now || m.weather_now;
   const wet = liveWx==='wet';
   $('wx').textContent = (liveWx||'dry').toUpperCase(); $('wx').classList.toggle('wet',wet);
+  // live track wetness % + drying/wetting trend (BlackRack-style weather read)
+  const wxd = $('wxDetail');
+  if(wxd){
+    const wc = wetnessCalc();
+    if(!wc || (wc.pct===0 && (!wc.raining))){ wxd.style.display='none'; }
+    else {
+      wxd.style.display='';
+      wxd.textContent = '💧'+wc.pct+'% · '+wc.arrow + (wc.raining>0.05?' · rain '+Math.round(wc.raining*100)+'%':'');
+      wxd.className = 'chip wetpct' + (wc.delta>0.02?' up':wc.delta<-0.02?' down':'');
+    }
+  }
   $('fuelLaps').textContent = m.fuel_laps_left;
   $('pitIn').textContent = m.pit_in_laps;
   $('pitTile').className = 'panel stat'+(m.pit_in_laps<=1?' crit':m.pit_in_laps<=3?' hot':'');
@@ -845,11 +954,20 @@ function render(){
         if(uc.undercut) bits.push('<span class="tp-ok">undercut P'+Math.max(1,(uc.pos||2)-1)+'</span> if they stay out');
         if(bits.length) trackLine = '<div class="ns-track">Box now: '+bits.join(' · ')+'</div>';
       }
+      // REFUEL CALC: measured-rate fuel to dial in + VE note + confidence
+      let fuelLine = '';
+      const rc = refuelCalc(nextStint);
+      if(rc){
+        fuelLine = '<div class="ns-fuel">⛽ add <b>~'+Math.round(rc.addL)+' L</b> · '+rc.laps+' laps'
+          + (rc.ve?' · <span class="nf-ve">VE→100%</span>':'')
+          + (rc.confident ? '' : ' · <span class="nf-est">est, need '+rc.needLaps+' lap'+(rc.needLaps===1?'':'s')+'</span>')
+          + '</div>';
+      }
       nsEl.className = 'nextstop' + (boxOn ? ' due' : '');
       nsEl.innerHTML =
         '<div class="ns-head">NEXT STOP <span class="ns-when">'+when+'</span></div>'+
         '<div class="ns-main">+'+fuelAdd+'L · '+tyre+' · '+swap+'</div>'+
-        winLine + callLine + trackLine;
+        winLine + fuelLine + callLine + trackLine;
     }
   }
   // race info strip
@@ -867,6 +985,24 @@ function render(){
   }
   $('bestLap').textContent = fmtLap(state.best_lap_s);
   $('lastPit').textContent = state.last_pit_lap==null ? '—' : state.last_pit_lap;
+
+  // CLASS-RELATIVE strip (multiclass GT3 fight) — the broadcast "relative" read
+  const crEl = $('clsRelStrip');
+  if(crEl){
+    const cr = classRelativeCalc();
+    if(!cr){ crEl.style.display='none'; }
+    else {
+      crEl.style.display='';
+      $('clsPos').textContent = cr.clsPos!=null ? 'P'+cr.clsPos+' / '+cr.clsCount : '—';
+      const fmtRel = (o,sign)=> !o ? '—'
+        : (o.intv!=null ? sign+o.intv.toFixed(1)+'s ' : '') + (o.pit?'🅿 ':'') + (o.name||'');
+      const ael=$('clsAhead'), bel=$('clsBehind');
+      ael.textContent = fmtRel(cr.ahead,'+'); ael.className='v'+(cr.ahead&&cr.ahead.intv!=null&&cr.ahead.intv<1?' warn':'');
+      bel.textContent = fmtRel(cr.behind,'-'); bel.className='v'+(cr.behind&&cr.behind.intv!=null&&cr.behind.intv<1?' warn':'');
+      $('clsBest').textContent = cr.clsBest!=null ? fmtLap(cr.clsBest) : '—';
+      $('clsField').textContent = cr.clsName+' ·';
+    }
+  }
   const haveWheels = !!(state.wheels && state.wheels.length);
   const haveDmg = haveWheels || state.body_pct!=null || state.susp_pct!=null || state.tyres_pct!=null;
   const dsum = Engine.damageSummary(cfg, state);
@@ -885,8 +1021,12 @@ function render(){
   we.textContent = haveWheels ? Math.round(100-worstWear*100)+'%' : '—';
   we.className = 'v '+(!haveWheels?'':(100-worstWear*100)<=40?'warn':(100-worstWear*100)<=20?'bad':'ok');
   $('tireLaps').textContent = state.laps_on_tires!=null ? state.laps_on_tires : '—';
-  const rate = worstWear / Math.max(1, state.laps_on_tires||0);  // wear fraction per lap
-  const lapsToLimit = rate>0 ? Math.floor((1.0 - worstWear)/rate) : null;
+  // laps of tyre life left: prefer the RECENT measured wear rate (BlackRack-style
+  // dynamic estimate), fall back to the since-start average. Project to a pit
+  // threshold (worn fraction we'd box at), not to fully dead rubber.
+  const wearRate = measuredWearPerLap() || (worstWear / Math.max(1, state.laps_on_tires||0));
+  const pitWorn = (cfg.tyre_pit_worn!=null) ? cfg.tyre_pit_worn : 0.85;  // box at ~85% worn
+  const lapsToLimit = (wearRate>0 && haveWheels) ? Math.max(0, Math.floor((pitWorn - worstWear)/wearRate)) : null;
   const wo=$('wearOut');
   wo.textContent = lapsToLimit==null ? '—' : '~'+lapsToLimit+' laps';
   const tyreLimited = lapsToLimit!=null && lapsToLimit < m.pit_in_laps;
@@ -912,22 +1052,27 @@ function render(){
     }
   }
 
-  // per-wheel tyre grid: wear % always; temp only when the feed provides it (spec mode may not)
+  // per-wheel tyre grid: LIFE% + working-temp (colored to the window) + pressure.
+  // temp/press come off the bridge (spec mode may omit them → show —).
   const tw=$('twheels');
   if(tw){
     const wn=['FL','FR','RL','RR'];
     const ws=(state.wheels&&state.wheels.length)?state.wheels.slice(0,4):[null,null,null,null];
+    const win=cfg.tyre_temp_window||{low:75,high:105};
+    const tcls=t=> t==null?'dim': t<win.low?'cold': t>win.high?'hot':'ok';   // working window
+    const psi=kpa=> kpa==null?null:(kpa/6.89476);
     tw.innerHTML = ws.map((w,i)=>{
       if(!w) return `<div class="tw"><div class="tw-n">${wn[i]}</div>`+
-        `<div class="tw-pct dim">—</div><div class="tw-temp dim">—</div></div>`;
-      // show tyre LIFE remaining (100% fresh -> 0% dead), the natural "how good
-      // is my tyre" number. worn fraction comes off the feed; life = 100 - worn.
+        `<div class="tw-pct dim">—</div><div class="tw-temp dim">—</div><div class="tw-psi dim">—</div></div>`;
       const life=Math.round(100-(w.wear||0)*100);
       const wcls=(w.flat||w.detached)?'bad':life<=40?'warn':'ok';
-      const temp=(w.temp!=null)?Math.round(w.temp)+'°':'';
+      const temp=(w.temp!=null)?Math.round(w.temp)+'°':'—';
+      const p=psi(w.press);
+      const pstr=(p!=null)?p.toFixed(1):'—';
       return `<div class="tw"><div class="tw-n">${wn[i]}</div>`+
         `<div class="tw-pct ${wcls}">${life}%</div>`+
-        (temp?`<div class="tw-temp">${temp}</div>`:`<div class="tw-temp dim">—</div>`)+`</div>`;
+        `<div class="tw-temp ${tcls(w.temp)}">${temp}</div>`+
+        `<div class="tw-psi ${p==null?'dim':''}">${pstr}${p!=null?'<i>psi</i>':''}</div></div>`;
     }).join('');
   }
 
@@ -1349,6 +1494,7 @@ function captureLap(lapNo){
     driver: state.current_driver || '—',
     fuel: (state.fuel_now!=null ? +state.fuel_now : null),
     ve: (state.virtual_energy!=null ? +state.virtual_energy : null),
+    worn: (function(){ const ws=state.wheels; return (ws&&ws.length)?Math.max(0,...ws.map(w=>w.wear||0)):null; })(),
     tire_laps: (state.laps_on_tires!=null ? state.laps_on_tires : null),
     pos: (state.position!=null ? state.position : null),
     wx: wxNow(),
@@ -1673,7 +1819,7 @@ const LIVE_FIELDS = ['fuel_now','fuel_capacity','virtual_energy','state_of_charg
   'current_driver','last_lap_s','best_lap_s','position','gap_ahead_s','gap_behind_s',
   'weather_now','penalties','scheduled_stops','aero_pct','body_pct','susp_pct','tyres_pct','repair_s',
   'parts_detached','last_impact_mag','last_impact_ago_s','tire_wear_pct','track_limits',
-  'flag','in_pits','session_remaining_s','track_temp','air_temp','lap_delta_s','cls_position'];
+  'flag','in_pits','session_remaining_s','wetness','raining','track_temp','air_temp','lap_delta_s','cls_position'];
 let _syncInit = true, _lastFeed = null, _pitActive = false;
 let _stintStartLap = null, _stintStartEl = null;   // for derived stint/tyre context
 let _lastRegenWx = null;

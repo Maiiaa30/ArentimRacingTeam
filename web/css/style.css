@@ -39,6 +39,9 @@ header::before{content:"";position:absolute;left:0;top:0;right:0;height:2px;
   color:var(--txt);background:#0c0f15;letter-spacing:1px}
 .chip.clock{font-weight:700;border-color:var(--line2)}
 .chip.wet{color:#49b6ff;border-color:#1c3a52;background:#0a1620}
+.chip.wetpct{color:#7fc4ff;border-color:#1c3a52;background:#0a1620;font-family:var(--mono);font-size:11px}
+.chip.wetpct.up{color:#ff8a82;border-color:var(--bad)}
+.chip.wetpct.down{color:#7ff0a8;border-color:rgba(46,201,107,.4)}
 .chip.tgt{color:var(--mut);text-transform:uppercase;font-size:11px}
 .chip.conn{font-weight:700}
 .chip.conn.live{color:#5fe08a;border-color:rgba(46,201,107,.45);background:rgba(46,201,107,.08)}
@@ -132,6 +135,11 @@ header::before{content:"";position:absolute;left:0;top:0;right:0;height:2px;
 .ns-track{font-family:var(--mono);font-size:11px;color:var(--mut);margin-top:4px;letter-spacing:.2px}
 .ns-track .tp-ok{color:#7ff0a8;font-weight:700}
 .ns-track .tp-bad{color:#ff8a82;font-weight:700}
+/* refuel calculator line */
+.ns-fuel{font-family:var(--mono);font-size:11px;color:var(--txt);margin-top:4px;letter-spacing:.2px}
+.ns-fuel b{color:#ffd451;font-weight:800}
+.ns-fuel .nf-ve{color:#7fe0ff}
+.ns-fuel .nf-est{color:var(--mut);font-style:italic}
 .sub-h{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--mut);
   margin:16px 0 6px;font-weight:700}
 .sub-h:first-child{margin-top:0}
@@ -235,6 +243,11 @@ tr.active{background:rgba(225,6,0,.08)} tr.active td:first-child{border-left:2px
 /* ---- clickable chip + damage modal ---- */
 .mini.clickable{cursor:pointer;transition:.15s}
 .mini.clickable:hover{border-color:var(--red)}
+/* class-relative strip — 5 tiles, left-accented GT3 blue */
+.strip.clsrel{grid-template-columns:repeat(5,1fr);margin-top:8px}
+.strip.clsrel .mini{border-left:2px solid #3ea6ff55}
+.strip.clsrel .clsrow .v{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.strip.clsrel .v.warn{color:var(--warn)}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.78);display:none;
   align-items:center;justify-content:center;z-index:50}
 .modal-bg.open{display:flex}
@@ -406,6 +419,10 @@ table.laptbl.pace{margin-bottom:18px}
 .tw-pct.ok{color:var(--ok)} .tw-pct.warn{color:var(--warn)} .tw-pct.bad{color:var(--bad)}
 .tw-temp{font-family:var(--mono);font-size:10px;color:#ff8a5c}
 .tw-temp.dim{color:var(--dim)}
+.tw-temp.cold{color:#4aa3ff} .tw-temp.ok{color:var(--ok)} .tw-temp.hot{color:var(--bad)}
+.tw-psi{font-family:var(--mono);font-size:10px;color:var(--mut);margin-top:1px}
+.tw-psi i{font-style:normal;font-size:8px;opacity:.6;margin-left:1px}
+.tw-psi.dim{color:var(--dim)}
 /* what-if comparison */
 .cmp-head,.cmp-row{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;align-items:center;
   font-family:var(--mono);padding:9px 2px;border-bottom:1px solid var(--line)}
@@ -643,8 +660,13 @@ label.fld{display:flex;justify-content:space-between;align-items:center;gap:10px
 .sst{display:flex;flex-direction:column;align-items:flex-end;min-width:40px}
 .sst span{font-size:9px;letter-spacing:.6px;color:var(--mut);font-weight:600}
 .sst b{font-family:var(--mono);font-size:13px;color:var(--txt);font-weight:700;font-variant-numeric:tabular-nums}
-.sst b.best{color:#b06cff}
+.sst b.best{color:#9aa3b2}
+.sst b.fl-o{color:#b06cff;font-weight:800}   /* session fastest (purple) */
+.sst b.fl-c{color:#2ec96b;font-weight:800}   /* class fastest (green) */
 .sst b.lead{color:var(--cc);font-weight:800}
+.sst b.hot{color:var(--warn)}
+/* battle: cars within 1s — amber left edge */
+.srow.battle{box-shadow:inset 2px 0 0 var(--warn)}
 /* stack the two class columns when the modal gets narrow.
    In a column flex with auto-height, flex:1 1 0 collapses the children to 0 —
    size them to content (header + its own scroll list) instead. */
