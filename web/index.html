@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Arentim Racing Team — Pit Wall</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b0f14'/%3E%3Ctext x='16' y='22' font-size='18' text-anchor='middle' fill='%233ea6ff' font-family='Arial' font-weight='bold'%3EA%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/style.css?v=2026-11-17g">
+<link rel="stylesheet" href="css/style.css?v=2026-11-17h">
 </head>
 <body>
 <header>
@@ -71,7 +71,6 @@
     <!-- plan -->
     <div class="panel strat">
       <h2>Race strategy</h2>
-      <p class="note" style="margin:-4px 0 8px">The full stop-by-stop plan for the rest of the race — who drives, which lap to box, tyres & fuel each stint. Re-anchors after each real pit stop or weather change, not every lap.</p>
       <div class="plan-stats" id="planStats"></div>
       <div class="tbl-scroll cscroll">
         <table>
@@ -126,6 +125,7 @@
           <button onclick="openWif()">What-if</button>
           <button onclick="openFuel()">Fuel save</button>
           <button onclick="openLaps()">Lap log</button>
+          <button onclick="openTrends()">Trends</button>
           <button onclick="openDrivers()">Driver load</button>
           <button onclick="openTimeline()">Timeline</button>
           <button onclick="openStandings()">Standings</button>
@@ -252,6 +252,16 @@
     <p class="note" style="margin-top:8px">Each completed lap recorded from the live stream — driver, time, fuel, tyre life. Export for post-race review.</p>
     <div id="lapPace"></div>
     <div id="lapBody"></div>
+  </div>
+</div>
+
+<!-- trends modal: fuel/lap + lap-time + VE over the race, overall and per stint -->
+<div class="modal-bg" id="trendModal">
+  <div class="modal wide">
+    <button class="x" onclick="closeTrends()">✕</button>
+    <h2>Trends</h2>
+    <p class="note" style="margin-top:4px">Measured from the live lap stream — lap time, fuel burn and VE drain across the race, overall and per stint. A stint = a fuel load (resets each pit / driver swap).</p>
+    <div id="trendBody"></div>
   </div>
 </div>
 
@@ -1535,6 +1545,7 @@ function captureLap(lapNo){
   });
   saveLapLog();
   if(document.getElementById('lapModal').classList.contains('open')) renderLapLog();
+  if(document.getElementById('trendModal').classList.contains('open')) renderTrends();
 }
 function renderLapLog(){
   const best = lapLog.reduce((m,r)=> (r.lap_s!=null && (m==null||r.lap_s<m)) ? r.lap_s : m, null);
@@ -1550,6 +1561,107 @@ function renderLapLog(){
   }).join('');
   $('lapBody').innerHTML = `<table class="laptbl"><thead><tr><th>Lap</th><th>Time</th><th>Driver</th>`+
     `<th>Fuel</th><th>Set lap</th><th>Pos</th><th>Wx</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+// ---- trends: fuel/lap + lap-time + VE across the race, overall and per stint ----
+function openTrends(){ renderTrends(); $('trendModal').classList.add('open'); }
+function closeTrends(){ $('trendModal').classList.remove('open'); }
+const _avg = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : null;
+// least-squares slope of y over its own index (seconds per lap of drift)
+function _slope(ys){
+  const n = ys.length; if(n<2) return null;
+  let sx=0,sy=0,sxx=0,sxy=0;
+  ys.forEach((y,x)=>{ sx+=x; sy+=y; sxx+=x*x; sxy+=x*y; });
+  const d = n*sxx - sx*sx; if(!d) return null;
+  return (n*sxy - sx*sy)/d;
+}
+function computeTrends(){
+  const laps = (lapLog||[]).filter(r=>r && r.lap!=null);
+  if(!laps.length) return null;
+  // per-lap derived burn: consumption = prev - cur (ignore refuel jumps / resets)
+  const rows = laps.map((r,i)=>{
+    const prev = i>0 ? laps[i-1] : null;
+    let fpl=null, vepl=null, refuel=false;
+    if(prev){
+      if(prev.fuel!=null && r.fuel!=null){ const d=prev.fuel-r.fuel; if(d>0 && d<30) fpl=d; else if(d<-1) refuel=true; }
+      if(prev.ve!=null   && r.ve!=null)  { const d=prev.ve-r.ve;     if(d>0 && d<0.5) vepl=d; else if(d<-0.02) refuel=true; }
+    }
+    return { lap:r.lap, lap_s:r.lap_s, driver:r.driver, fpl, vepl, refuel };
+  });
+  // segment into stints: boundary on refuel or driver change
+  const stints=[]; let cur=null;
+  rows.forEach(r=>{
+    if(!cur || r.refuel || cur.driver!==r.driver){ cur={driver:r.driver, startLap:r.lap, laps:[]}; stints.push(cur); }
+    cur.laps.push(r);
+  });
+  const stat = laparr => {
+    const lt = laparr.map(l=>l.lap_s).filter(v=>v!=null&&v>0);
+    const best = lt.length?Math.min(...lt):null;
+    const clean = best!=null ? lt.filter(v=>v<=best*1.07) : lt;
+    return {
+      n: laparr.length,
+      avgLt: _avg(clean), bestLt: best,
+      avgFpl: _avg(laparr.map(l=>l.fpl).filter(v=>v!=null)),
+      avgVe:  _avg(laparr.map(l=>l.vepl).filter(v=>v!=null)),
+      deg: _slope(clean)        // lap-time drift across the stint (s/lap)
+    };
+  };
+  const stintStats = stints.map((s,idx)=>({ idx, driver:s.driver, startLap:s.startLap, ...stat(s.laps) }));
+  return { rows, stints:stintStats, overall: stat(rows) };
+}
+// tiny inline sparkline (SVG). vals may contain nulls (gaps are skipped). marks =
+// indexes to dot (stint starts). invert=false → lower is better shown low.
+function spark(vals, color, marks, minRange){
+  const W=640, H=56, pad=4;
+  const pts = vals.map((v,i)=>({v,i})).filter(p=>p.v!=null);
+  if(pts.length<2) return '<div class="spark-empty">not enough laps yet</div>';
+  const vs=pts.map(p=>p.v); let min=Math.min(...vs), max=Math.max(...vs);
+  // enforce a sensible minimum range so a near-flat series (fuel/lap, VE) renders
+  // flat instead of amplifying 0.1-unit rounding noise into huge swings.
+  const mr = minRange||0, actual = max-min;
+  if(actual < mr){ const mid=(min+max)/2; min=mid-mr/2; max=mid+mr/2; }
+  const span=(max-min)||1;
+  const x=i=> pad + i*(W-2*pad)/(vals.length-1);
+  const y=v=> pad + (1-(v-min)/span)*(H-2*pad);
+  const d = pts.map((p,k)=> (k?'L':'M')+x(p.i).toFixed(1)+' '+y(p.v).toFixed(1)).join(' ');
+  const dots = (marks||[]).filter(i=>vals[i]!=null).map(i=>`<circle cx="${x(i).toFixed(1)}" cy="${y(vals[i]).toFixed(1)}" r="2.5" class="spark-mark"/>`).join('');
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">`+
+    `<path d="${d}" fill="none" stroke="${color}" stroke-width="1.6"/>${dots}</svg>`;
+}
+function renderTrends(){
+  const el = $('trendBody'); if(!el) return;
+  const t = computeTrends();
+  if(!t){ el.innerHTML = '<p class="note">No laps yet — trends build as the car completes laps.</p>'; return; }
+  const o = t.overall;
+  const fmtS = v => v!=null ? v.toFixed(2)+'s' : '—';
+  const fmtF = v => v!=null ? v.toFixed(2)+' L' : '—';
+  const fmtV = v => v!=null ? (v*100).toFixed(1)+'%' : '—';
+  const marks = []; let seen=new Set();
+  t.stints.forEach(s=>{ const idx=t.rows.findIndex(r=>r.lap===s.startLap); if(idx>=0) marks.push(idx); });
+  const ov =
+    `<div class="trend-ov">`+
+      `<div class="tov"><span>LAPS</span><b>${o.n}</b></div>`+
+      `<div class="tov"><span>AVG LAP</span><b>${fmtS(o.avgLt)}</b></div>`+
+      `<div class="tov"><span>BEST LAP</span><b>${o.bestLt!=null?fmtLap(o.bestLt):'—'}</b></div>`+
+      `<div class="tov"><span>AVG FUEL/LAP</span><b>${fmtF(o.avgFpl)}</b></div>`+
+      `<div class="tov"><span>AVG VE/LAP</span><b>${fmtV(o.avgVe)}</b></div>`+
+    `</div>`;
+  const charts =
+    `<div class="trend-chart"><div class="tc-h">Lap time <span>${fmtS(o.avgLt)} avg · lower = faster</span></div>${spark(t.rows.map(r=>r.lap_s), '#5fd3ff', marks, 3)}</div>`+
+    `<div class="trend-chart"><div class="tc-h">Fuel / lap <span>${fmtF(o.avgFpl)} avg</span></div>${spark(t.rows.map(r=>r.fpl), '#ffb454', marks, 1.0)}</div>`+
+    `<div class="trend-chart"><div class="tc-h">VE / lap <span>${fmtV(o.avgVe)} avg</span></div>${spark(t.rows.map(r=>r.vepl!=null?r.vepl*100:null), '#8b7dff', marks, 2.0)}</div>`;
+  const srows = t.stints.map(s=>{
+    const degCls = s.deg==null?'':(s.deg>0.08?'bad':s.deg<-0.02?'ok':'');
+    const degTxt = s.deg==null?'—':(s.deg>0?'+':'')+s.deg.toFixed(2)+'s/lap';
+    return `<tr><td>${s.idx+1}</td><td class="dn">${_esc(s.driver||'—')}</td><td>L${s.startLap}</td><td>${s.n}</td>`+
+      `<td>${fmtS(s.avgLt)}</td><td>${s.bestLt!=null?fmtLap(s.bestLt):'—'}</td>`+
+      `<td>${fmtF(s.avgFpl)}</td><td>${fmtV(s.avgVe)}</td>`+
+      `<td class="${degCls}">${degTxt}</td></tr>`;
+  }).join('');
+  const tbl =
+    `<div class="tc-h" style="margin-top:14px">Per stint</div>`+
+    `<table class="laptbl"><thead><tr><th>#</th><th>Driver</th><th>From</th><th>Laps</th>`+
+    `<th>Avg lap</th><th>Best</th><th>Fuel/lap</th><th>VE/lap</th><th>Deg</th></tr></thead><tbody>${srows}</tbody></table>`;
+  el.innerHTML = ov + charts + tbl;
 }
 // per-driver pace comparison (actual laps). Clean/representative laps only:
 // drop in/out-laps and anything >107% of the driver's own best (pits, offs).

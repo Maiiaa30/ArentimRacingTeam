@@ -730,3 +730,20 @@ tr.splash td{opacity:.72}
   display:flex;flex-direction:column;gap:2px}
 .sec .sk{font-size:10px;letter-spacing:1px;color:var(--mut);text-transform:uppercase}
 .sec .sv{font-family:var(--mono);font-weight:700;font-variant-numeric:tabular-nums;font-size:15px}
+
+/* ---- trends modal ---- */
+.trend-ov{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:12px 0}
+.tov{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;
+  display:flex;flex-direction:column;gap:3px}
+.tov span{font-size:10px;letter-spacing:1px;color:var(--mut);text-transform:uppercase}
+.tov b{font-family:var(--mono);font-weight:700;font-variant-numeric:tabular-nums;font-size:16px}
+.trend-chart{margin:10px 0}
+.tc-h{font-size:11px;letter-spacing:1px;color:var(--mut);text-transform:uppercase;
+  display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
+.tc-h span{font-size:11px;letter-spacing:0;color:var(--dim);text-transform:none;font-family:var(--mono)}
+.spark{width:100%;height:56px;display:block;background:var(--panel2);
+  border:1px solid var(--line);border-radius:8px}
+.spark-mark{fill:#fff;opacity:.5}
+.spark-empty{font-size:12px;color:var(--dim);padding:18px 10px;background:var(--panel2);
+  border:1px solid var(--line);border-radius:8px}
+@media(max-width:700px){ .trend-ov{grid-template-columns:repeat(2,1fr)} }
