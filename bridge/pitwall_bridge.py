@@ -232,6 +232,7 @@ def read_state(info):
 
     track_temp = g(si, "mTrackTemp")               # Celsius
     air_temp = g(si, "mAmbientTemp")               # Celsius
+    track_name = dec(g(si, "mTrackName") or b"") or None   # circuit name (track map)
 
     # session clock: LMU gives remaining directly; fall back to end - current.
     session_remaining = g(si, "mSessionTimeRemaining")
@@ -366,6 +367,7 @@ def read_state(info):
         "raining": round(raining, 3) if raining is not None else None,   # 0..1 rain severity
         "track_temp": track_temp,
         "air_temp": air_temp,
+        "track_name": track_name,
         "session_remaining_s": session_remaining,
         "sectors": sectors,
         "rivals": rivals or None,
@@ -427,6 +429,7 @@ def demo_state(tick):
         "session_remaining_s": max(0, 21600 - tick * 24),
         "track_temp": round(30 - (6 if wet else 0) + math.sin(tick / 40) * 2, 1),
         "air_temp": round(20 - (3 if wet else 0) + math.sin(tick / 60), 1),
+        "track_name": "Monza (demo)",
         "sectors": {
             "s1": round((95.0 * (1.12 if wet else 1.0)) * 0.32, 3),
             "s2": round((95.0 * (1.12 if wet else 1.0)) * 0.40, 3),

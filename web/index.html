@@ -261,9 +261,9 @@
   <div class="modal wide">
     <button class="x" onclick="closeMap()">✕</button>
     <h2>Track map <span class="chip" id="mapCars">—</span></h2>
-    <p class="note" style="margin-top:4px">Live positions from the game. The circuit draws itself from our car's path over a lap. Dots are cars, coloured by class — ours ringed in white. Needs the bridge running (sends world coordinates).</p>
+    <p class="note" style="margin-top:4px">Live positions from the game. The track is identified by name and its shape traced from our car's first lap, then saved — so next time it loads instantly. Dots are cars, coloured by class — ours ringed in white. Needs the bridge running (sends world coordinates).</p>
     <div id="mapBody"></div>
-    <div class="btns" style="margin-top:8px"><button onclick="trackTrail=[];_lastTrailPt=null;renderMap()">Clear track</button></div>
+    <div class="btns" style="margin-top:8px"><button onclick="clearTrackOutline()">Clear track</button></div>
   </div>
 </div>
 
@@ -1574,32 +1574,74 @@ function renderLapLog(){
   $('lapBody').innerHTML = `<table class="laptbl"><thead><tr><th>Lap</th><th>Time</th><th>Driver</th>`+
     `<th>Fuel</th><th>Set lap</th><th>Pos</th><th>Wx</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
-// ---- track map: self-drawing circuit from our position trail + live car dots ----
-let trackTrail = [];              // our car's [x,z] path → traces the circuit
-let _lastTrailPt = null;
-const TRAIL_MAX = 900;            // ~one lap of points at a few-metre spacing
+// ---- track map: real circuit (identified + saved per track) + live car dots ----
+let trackTrail = [];              // our car's live [x,z] path this lap
+let trackOutline = null;          // saved full-lap outline for the CURRENT track
+let trackName = null;             // circuit name from the game (identifies the track)
+let _lastTrailPt = null, _lastMapLap = null;
+const TRAIL_MAX = 1200;           // a lap of points at a few-metre spacing
+const TRACK_KEY = 'arentim_pitwall_track::';   // + track name → saved outline
+function _trackSlug(n){ return (n||'').toString().trim().toLowerCase(); }
+function loadOutline(name){
+  if(!name) return null;
+  try { const v = JSON.parse(localStorage.getItem(TRACK_KEY+_trackSlug(name))||'null');
+        return Array.isArray(v) && v.length>20 ? v : null; } catch(e){ return null; }
+}
+function saveOutline(name, pts){
+  if(!name || !Array.isArray(pts) || pts.length<40) return;
+  try { localStorage.setItem(TRACK_KEY+_trackSlug(name), JSON.stringify(pts)); } catch(e){}
+}
+// called on every feed: pick up a track change, capture our position, and snapshot
+// the outline each completed lap so the real circuit is known from then on.
 function captureTrackPos(){
-  const us = (state.rivals||[]).find(r=> r && r.is_us && Array.isArray(r.pos_xz));
-  if(!us) return;
-  const x=us.pos_xz[0], z=us.pos_xz[1];
-  if(x==null || z==null) return;
-  if(_lastTrailPt){
-    const dx=x-_lastTrailPt[0], dz=z-_lastTrailPt[1];
-    if(dx*dx+dz*dz < 9) return;    // moved <3 m: skip (density/noise control)
+  // track identity: when it changes, load that track's saved outline and start a
+  // fresh trail in the new coordinate frame.
+  const nm = state.track_name || null;
+  if(nm !== trackName){
+    trackName = nm;
+    trackOutline = loadOutline(nm);
+    trackTrail = []; _lastTrailPt = null; _lastMapLap = state.laps_done;
   }
-  trackTrail.push([x,z]); _lastTrailPt=[x,z];
-  if(trackTrail.length>TRAIL_MAX) trackTrail.shift();
+  const us = (state.rivals||[]).find(r=> r && r.is_us && Array.isArray(r.pos_xz));
+  if(us){
+    const x=us.pos_xz[0], z=us.pos_xz[1];
+    if(x!=null && z!=null){
+      let moved = true;
+      if(_lastTrailPt){ const dx=x-_lastTrailPt[0], dz=z-_lastTrailPt[1]; moved = (dx*dx+dz*dz) >= 9; }
+      if(moved){
+        trackTrail.push([x,z]); _lastTrailPt=[x,z];
+        if(trackTrail.length>TRAIL_MAX) trackTrail.shift();
+      }
+    }
+  }
+  // on each completed lap, freeze the just-driven lap as THE outline for this track
+  if(state.laps_done!=null && _lastMapLap!=null && state.laps_done > _lastMapLap){
+    if(trackTrail.length>=40){ trackOutline = trackTrail.slice(); saveOutline(trackName, trackOutline); }
+    _lastMapLap = state.laps_done;
+  }
   if(document.getElementById('mapModal').classList.contains('open')) renderMap();
 }
 function openMap(){ renderMap(); $('mapModal').classList.add('open'); }
 function closeMap(){ $('mapModal').classList.remove('open'); }
+function clearTrackOutline(){
+  trackTrail=[]; _lastTrailPt=null; trackOutline=null;
+  try { if(trackName) localStorage.removeItem(TRACK_KEY+_trackSlug(trackName)); } catch(e){}
+  renderMap();
+}
 function renderMap(){
   const el = $('mapBody'); if(!el) return;
   const cars = (state.rivals||[]).filter(r=> r && Array.isArray(r.pos_xz) && r.pos_xz[0]!=null);
-  if($('mapCars')) $('mapCars').textContent = cars.length ? cars.length+' cars' : 'no feed';
-  const pts = trackTrail.concat(cars.map(c=>c.pos_xz));
+  if($('mapCars')){
+    const label = (trackName ? trackName : (cars.length?'unknown track':'no feed'))
+      + (cars.length ? ' · '+cars.length+' cars' : '');
+    $('mapCars').textContent = label;
+  }
+  // circuit line: the saved outline if we have it (shows the real track from frame
+  // one), otherwise the live trail still building this lap.
+  const circuit = (trackOutline && trackOutline.length > trackTrail.length) ? trackOutline : trackTrail;
+  const pts = circuit.concat(cars.map(c=>c.pos_xz));
   if(pts.length<2){
-    el.innerHTML = '<p class="note">No position data yet — start the bridge (or run it with --demo). The circuit traces itself as the car completes a lap.</p>';
+    el.innerHTML = '<p class="note">No position data yet — start the bridge (or run it with --demo). The circuit is identified from the game and traced over a lap; it\'s saved per track so next time it loads instantly.</p>';
     return;
   }
   let minX=Infinity,maxX=-Infinity,minZ=Infinity,maxZ=-Infinity;
@@ -1610,8 +1652,8 @@ function renderMap(){
   const VW=680, VH=Math.max(240, Math.min(520, Math.round(VW*RH/RW)));
   const sx=x=> ((x-minX)/RW*VW);
   const sy=z=> (VH-(z-minZ)/RH*VH);        // invert Z so north is up
-  const trail = trackTrail.length>1
-    ? `<path d="${trackTrail.map((p,i)=>(i?'L':'M')+sx(p[0]).toFixed(1)+' '+sy(p[1]).toFixed(1)).join(' ')}" class="trk-path"/>`
+  const trail = circuit.length>1
+    ? `<path d="${circuit.map((p,i)=>(i?'L':'M')+sx(p[0]).toFixed(1)+' '+sy(p[1]).toFixed(1)).join(' ')}" class="trk-path"/>`
     : '';
   const dots = cars.map(c=>{
     const x=c.pos_xz[0], z=c.pos_xz[1], cx=sx(x).toFixed(1), cy=sy(z).toFixed(1);
@@ -2044,7 +2086,7 @@ const LIVE_FIELDS = ['fuel_now','fuel_capacity','virtual_energy','state_of_charg
   'current_driver','last_lap_s','best_lap_s','position','gap_ahead_s','gap_behind_s',
   'weather_now','penalties','scheduled_stops','aero_pct','body_pct','susp_pct','tyres_pct','repair_s',
   'parts_detached','last_impact_mag','last_impact_ago_s','tire_wear_pct','track_limits',
-  'flag','in_pits','session_remaining_s','wetness','raining','track_temp','air_temp','lap_delta_s','cls_position'];
+  'flag','in_pits','session_remaining_s','wetness','raining','track_temp','air_temp','lap_delta_s','cls_position','track_name'];
 let _syncInit = true, _lastFeed = null, _pitActive = false;
 let _stintStartLap = null, _stintStartEl = null;   // for derived stint/tyre context
 let _lastRegenWx = null;
@@ -2146,7 +2188,8 @@ function resetSessionData(){
   _curDriverName = null; _driverSeatStartEl = null;
   _stintStartLap = null; _stintStartEl = null; _lastLoggedLap = state.laps_done||0;
   _tempLog = []; try{ localStorage.removeItem(LIVE_KEY); }catch(e){}
-  trackTrail = []; _lastTrailPt = null;
+  trackTrail = []; _lastTrailPt = null; _lastMapLap = state.laps_done||0;
+  // keep the saved per-track outline (circuit geometry survives a new session)
   if(typeof render==='function') render();
 }
 function confirmResetSession(){
