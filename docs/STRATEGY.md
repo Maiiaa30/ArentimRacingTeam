@@ -76,8 +76,10 @@ off the in-game **MFD fuel page**:
 4. **Tyre drop-off** over a long run — watch outer-rear. If it falls off before
    ~48 laps, switch to single-stint tyres (needs more sets — we only have 5, so
    that means fewer stints or accepting the drop).
-5. **Pit-stop rules** — any mandatory stops / min drive time per driver in the
-   event rules? Not accounted for yet.
+5. **Pit-stop rules** — any mandatory stops / min or **max** drive time per
+   driver in the event rules? The board now tracks continuous seat time per
+   driver and warns at `driver_max_consecutive_min` (default 80m) — set it to the
+   event's real limit, or `driver_max_total_min` if there's a total cap.
 
 Set the real values in the dashboard **Setup** panel; the live plan updates. The
 "Default strat" view stays fixed as the agreed baseline to compare against.
@@ -93,3 +95,19 @@ Set the real values in the dashboard **Setup** panel; the live plan updates. The
 - `avg_lap_s 112`, `fuel_per_lap 2.8`, `tank_cap 120`, `pit_loss_s 60` — Monza
   BMW M4 baselines.
 - `tire_reserve_sets: 1` — hold 1 set back for wet/damage.
+- `pit_window_early/late: 2` — the ±laps band drawn around the ideal stop lap.
+- `driver_max_consecutive_min: 80`, `driver_max_total_min: null` — seat-time reg
+  the Status "Seat time" row + driver-modal table warn against.
+- `incident_cost: {contact_s:4, offtrack_s:1}` — turns contact/off counts into the
+  "time lost" seconds per driver.
+- `ref_track_temp_c: 30`, `psi_per_degC: 0.1` — baseline the cold-pressure hint
+  adjusts from as track temp drifts.
+
+## Live engineer-call layer (reads only — no plan change)
+On top of the plan, the board surfaces the calls a race engineer makes off the
+data: **SAVE/PUSH/ON-TARGET** to the next stop, **undercut/overcut** on a stop-now,
+**stint-pace deg**, **FCY/SC cheap-stop** prompt, **pace target** vs live average,
+**to-flag** VE/fuel margin, **seat-time** regulation, **incident time-lost**, and a
+**track-temp + cold-psi** hint. All are derived from live telemetry; none change the
+plan — they tell the operator what to do with it. Full operator guide in
+[RACE-DAY.md](RACE-DAY.md) → *Live engineer calls*.

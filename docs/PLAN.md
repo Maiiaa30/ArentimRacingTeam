@@ -2,12 +2,16 @@
 
 ## Locked facts
 - Sim: **Le Mans Ultimate** (rF2 engine).
-- Race: **6 hours**, one shared car, **4 drivers**, free swaps (no drive-time rules).
+- Race: **6 hours**, one shared car, **4 drivers**, free swaps. No drive-time rule
+  enforced by the sim, but the board now **tracks seat time** and warns against a
+  configurable `driver_max_consecutive_min` (set it if the event has a limit).
 - Tires: **20-tire budget**, wets come out of the same 20. Counting mode (set vs individual)
   TBD — configurable (`tire_count_mode`), confirm in-game.
 - Weather: **pulled from game timeline** + live wetness; manual fallback. We do NOT predict.
 - Data in: **auto from telemetry** (fuel, lap, driver, pits, weather) — validate fields first.
-- SC/FCY: not in game → **dropped**. One manual "Caution/Incident" instead.
+- SC/FCY: no caution *control* in the sim, but if telemetry feeds a yellow/FCY/SC
+  **flag** the board raises a **cheap-stop prompt** when a stop is near. Manual
+  **Forced Pit** covers an off-schedule incident stop.
 - Optimize target: **operator picks** per race — fewest_stops / fastest / safest.
 
 ## Concept — 3 layers + sandbox
@@ -69,14 +73,19 @@ UI (blackrack-style): a color-coded DAMAGE list — **Aero / Body / Susp / Tyres
 ## Build phases
 1. Schema + dashboard shell ✅ (scaffold)
 2. Strategy engine ✅ (pure JS)  ← refine math vs real practice data
-3. Dashboard ↔ realtime (Supabase) + sim feeder writes live
-4. Sim feeder polish — rehearse full race
-5. Event engine + what-if sandbox (wire buttons)
-6. Real LMU Python bridge + **validate fields**
-7. Multi-PC driver-swap continuity
-8. Polish — alarms (box/swap horn), weather strip, export
+3. Dashboard ↔ realtime (Supabase) + sim feeder writes live ✅
+4. Sim feeder polish — rehearse full race ✅
+5. Event engine + what-if sandbox (wire buttons) ✅
+6. Real LMU Python bridge + **validate fields** ✅ (field names validated vs
+   struct; live value/units check pending the 1h practice stint)
+7. Multi-PC driver-swap continuity — handled via Supabase single row (seat time
+   + stint log follow current_driver); real multi-PC rehearsal pending
+8. Polish ✅ — feed-loss banners, weather strip, CSV export, VE-aware pit window,
+   pit timer, stint/incident history, **live engineer-call layer** (save/push,
+   undercut, deg, FCY, pace target, to-flag, seat-time, temp/psi)
 
-Phases 1–5 need no game.
+Phases 1–5 need no game. **Remaining before race day: the live practice-stint
+value check (phase 6 tail) + confirming the real car number/entry.**
 
 ## Risks to validate
 - **LMU shared memory fields** — fuel + wetness + forecast exposed? (biggest unknown)

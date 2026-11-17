@@ -55,8 +55,13 @@ confirms the game's **values** map right. Watch for:
       but `ve_per_lap` in `config.js` should be updated to the real figure.
 - [ ] **Pit-in** counts down toward the **VE** stop (~24), not the fuel number
       (~40). When VE binds the tile says *VE-limited*.
-- [ ] **Tyre wear%** on the grid **rises** as the stint goes (not stuck/inverted).
-- [ ] **Pit** when you box: the board auto-logs entry/exit and resets the stint.
+- [ ] **Tyre-life %** on the grid **falls** as the stint goes (100 fresh → down).
+- [ ] **Track temp / air temp** populate (Tyres panel). If they stay `—` the
+      bridge isn't sending `track_temp`/`air_temp` yet — the trend + psi hint need
+      them. **Off-tracks** need the bridge's `track_limits` field, so **restart the
+      bridge** after any update to pick up newly added fields; contacts work without.
+- [ ] **Pit** when you box: the board auto-logs entry/exit, runs the pit timer,
+      writes the stint to history, and resets the stint.
 
 Paste the `--print` output back if anything looks wrong — the mapping gets tuned
 to match. Field *names* are already validated against the struct, so this is a
@@ -75,9 +80,54 @@ value/units check, not a debug-from-scratch.
   if it's well off, the pit window still self-corrects (it uses the measured rate).
 - **Strategy Brain** (Status panel): the recommendation engine. See below.
 - **Next-stop card:** what the upcoming stop is — fuel to add, tyres new/keep,
-  driver swap or stays in.
-- **Tyres:** used / budget (20). Red = over budget, must double-stint more.
+  driver swap or stays in, the live window band (`L18–22 · ideal L20`), and the
+  **engineer call** (SAVE/PUSH/ON-TARGET + undercut) — see *Live engineer calls*.
+- **Race strategy table (left):** the full stop-by-stop plan for the rest of the
+  race. It **re-anchors only after a real pit stop or a weather change**, not
+  every lap — so it no longer churns. The live pit window + VE track reality
+  lap-by-lap in the Status panel; the table is the big picture.
+- **Tyres:** used / budget (20). Red = over budget, must double-stint more. Below
+  it: worst **tyre-life %** (100 = fresh), laps-on-set, wear-out estimate, and
+  **track temp** trend + a cold-pressure hint.
+- **Status panel rows:** Stint pace (deg), Seat time (reg), Laps left, Stops left,
+  Avg lap, **Pace target**, **To flag**, Make finish.
 - **Events log:** every pit, weather call, incident, pace change — timestamped.
+- **Banners (top of page):** 📻 BOX THIS LAP · 🅿 IN PITS (live pit timer) ·
+  ⚑ FCY/SC cheap-stop · feed-loss. They only show when they matter.
+
+---
+
+## Live engineer calls (what the data is telling you)
+
+These are the blind-engineer read-outs — they let you call the race off the
+numbers alone, no eyes on track needed.
+
+- **SAVE / PUSH / ON-TARGET** (next-stop card): whether you'll reach the ideal
+  stop on the energy/fuel you have. **PUSH · +1.5 laps in hand** = margin, send
+  it. **SAVE · lift & coast ~0.2%/lap** = you're draining too fast, short-shift /
+  lift. **ON TARGET** = right on the number. Uses the *more binding* of VE and
+  fuel. (Hidden once it's BOX-NOW — the stop call takes over.)
+- **Box-now track line** (undercut/overcut): what a stop *right now* does to
+  position — "keep P12 (+8s on P13)" or "lose P12 → rejoin 52s behind · undercut
+  P11 if they stay out". Gap vs pit-loss. Use it when a rival is close.
+- **Stint pace** (Status): deg read-out from lap times — **steady** / **+0.4s
+  easing** / **+1.2s dropping**. Dropping = tyres going off → consider boxing at
+  the early edge of the window.
+- **Seat time** (Status): continuous time at the wheel for the current driver vs
+  the reg (`driver_max_consecutive_min`, default 80m). Turns amber near the limit,
+  red over it — get them out at the next stop.
+- **Pace target** (Status): the lap time needed to make the planned distance in
+  the race clock, vs the live average: **· 2.6s spare** (comfortable) or **· short
+  2.0s** (can't make the laps at this pace). Mostly comfortable in an energy race.
+- **To flag** (Status): whole-race VE/fuel margin given the stops you plan to make
+  — **+26 laps (VE)** = plenty, a negative = you're short and need an extra splash.
+- **Track temp + cold-psi hint** (Tyres): temp trend arrow + "drop cold psi ~0.5
+  (vs 30°C set)" when the track runs hotter/cooler than the reference.
+
+**Driver load** button opens the per-driver history: planned load, **actual this
+session** (stints, laps, best, contacts, off-tracks, **time lost**), **seat time
+actual**, and **stint-by-stint** (tyre-life end + pit time). This is the "compare
+the drivers later" record — it persists in the browser.
 
 ---
 
@@ -105,7 +155,10 @@ The Brain never acts on its own. Applying is always your call.
 ### Pit stop (normal)
 The board auto-detects pit entry/exit from the game (`in_pits`) and logs it —
 you don't press anything. Watch the Next-stop card so you can call the driver in
-on the right lap.
+on the right lap. While stopped, the 🅿 **IN PITS** banner shows a **live pit
+timer**, the stop number, and what the tyres were at. On exit the stint is written
+to the per-driver history (laps, best, tyre-life, contacts, off-tracks, pit time)
+and the plan re-anchors from the real stop lap.
 
 ### Damage / forced stop
 Car is hurt and must pit now, off-schedule:
@@ -115,6 +168,15 @@ Car is hurt and must pit now, off-schedule:
    (fewer stops, or tyre rationing). Apply if it makes sense.
 3. If the Brain goes red, you've spent a tyre set early; accept fewer fresh sets
    later or a short final stint.
+
+### Full-course yellow / safety car
+When the field is slowed and a stop is near, pitting is **much cheaper** (you lose
+far less relative time). The board raises an amber **⚑ CHEAP STOP, BOX NOW** banner
+when the flag is FCY/SC/yellow and your stop is within ~6 laps.
+1. If the banner is up and you're in (or near) the window, **box now** — take the
+   discounted stop even a few laps early.
+2. The game auto-logs the stop as usual; the plan re-anchors on pit exit.
+3. If you're nowhere near a stop, ignore it — don't pit early just to chase it.
 
 ### Rain
 1. When it starts raining, hit **Rain NOW**. The remaining plan rebuilds onto
