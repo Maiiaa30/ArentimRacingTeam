@@ -34,12 +34,23 @@ docs/PLAN.md    full plan + strategy math
 
 ## Features
 
+- **Tabbed board** — persistent KPI header + sticky tabs: **Strategy · Live · Trends ·
+  Map · Field**, one focused view at a time (no nested scroll), with a persistent
+  ACTIONS bar at the foot. Replaces the old single-screen 3-column cram.
 - **Strategy engine** — fuel + tyre limited stint fill, driver rotation, weather overlay,
   tyre rationing, target-driven (fewest stops / fastest / safest).
 - **Live tracker** — fuel-laps-left, pit-in-N, make-finish, swap alarm (BOX banner + horn).
 - **Event engine** — Rain / Forced Pit / Pace Change lock past stints, regenerate the rest.
 - **What-if sandbox** + **Fuel save** calculators.
 - **Damage panel** — LMU Aero/Body/Susp/Tyres % + repair estimate, auto repair-or-stay call.
+- **Trends tab** — lap-time, fuel/lap and VE/lap sparklines (overall + per stint) with
+  **hover read-out** (lap number + value), measured from the live lap stream.
+- **Track map** — self-draws the circuit from our world-coordinate trail, **identifies the
+  track by name** and saves the outline per track (loads instantly next time); live car
+  dots coloured by class, ours ringed white.
+- **Field (standings)** — class filter (defaults to our class), per-car GAP/INT/LAST/BEST/
+  LAPS/**ENERGY**/**STOPS**/**PEN**/**LIMITS**/**DAMAGE** + pit-state / DNF tags, from
+  per-vehicle telemetry (damage & limits for every car, not just ours).
 - **Lap log** — one row per lap, fastest highlighted, **CSV export** for post-race review.
 - **Sim feeder** — manual inject + **Auto-play** (rehearse 6h in minutes) + scenarios.
 - **Live-link status chip** — live / stale / backend at a glance.

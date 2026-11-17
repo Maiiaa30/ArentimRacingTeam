@@ -60,7 +60,12 @@ confirms the game's **values** map right. Watch for:
       **track wetness %** (weather chip) populate. If any stay `—` the bridge isn't
       sending that field yet — **restart the bridge** after any update to pick up
       newly added fields (`track_limits`, `wetness`, `raining`, per-wheel
-      `temp`/`press`). Contacts + life% work without a restart.
+      `temp`/`press`, `track_name` for the map, and per-rival `pit_state` /
+      `pit_stops` / `penalties` / `damage_pct` for the Field tab). Contacts +
+      life% work without a restart.
+- [ ] **Map** tab: after one lap the circuit outline appears and the track name
+      shows in the header; cars sit on it. **Field** tab: rivals show energy,
+      stops, penalties and damage (damage/limits come from per-vehicle telemetry).
 - [ ] **Pit** when you box: the board auto-logs entry/exit, runs the pit timer,
       writes the stint to history, and resets the stint.
 
@@ -72,6 +77,21 @@ value/units check, not a debug-from-scratch.
 
 ## Reading the board
 
+**Layout — persistent top + tabs.** The top of the page always shows the hero
+KPI tiles, race/class strips and weather. Below them a **tab bar** switches one
+focused view at a time:
+
+| Tab | What's on it |
+|---|---|
+| **Strategy** | Full race-strategy table + **Next call** (Strategy Brain, next-stop card, laps/stops left, make-finish). |
+| **Live** | Engineer read-outs (on track, stint, seat time, avg, pace target, **damage**) · Tyres grid · Events log. |
+| **Trends** | Lap-time / fuel-per-lap / VE-per-lap sparklines, overall + per stint. Hover a line for the lap + value. |
+| **Map** | Live track map — circuit auto-identified and drawn, cars as class-coloured dots (ours ringed white). |
+| **Field** | Standings. Pick the class (defaults to ours); each car shows gap/int/pace, energy, stops, penalties, limits, damage. |
+
+The **ACTIONS bar** at the foot is always there: Rain / Dry up / Forced Pit /
+Pace / What-if / Fuel save / Lap log / Driver load / Timeline / Default strat.
+
 - **Hero row:** Fuel laps left · Pit-in (laps) · Stint lap. **Pit-in is the number
   that matters** — it counts down to the stop, and for our LMGT3 it tracks
   **Virtual Energy**, not fuel (the tank lasts ~40 laps, VE forces the stop at
@@ -79,16 +99,16 @@ value/units check, not a debug-from-scratch.
 - **Fuel tile subtext** shows live measured rates: `80.0 L · 2.8 L/lap · VE 51%
   (4.5%/lap)`. The **%/lap** is the real VE drain — confirm it sits near **4.2**;
   if it's well off, the pit window still self-corrects (it uses the measured rate).
-- **Strategy Brain** (Status panel): the recommendation engine. See below.
+- **Strategy Brain** (Strategy tab · *Next call*): the recommendation engine. See below.
 - **Next-stop card:** what the upcoming stop is — fuel to add, tyres new/keep,
   driver swap or stays in, the live window band (`L18–22 · ideal L20`), the
   **refuel calculator** (`⛽ add ~70 L · 24 laps · VE→100%`, with an "est, need N
   laps" flag until consumption is measured), and the **engineer call**
   (SAVE/PUSH/ON-TARGET + undercut) — see *Live engineer calls*.
-- **Race strategy table (left):** the full stop-by-stop plan for the rest of the
-  race. It **re-anchors only after a real pit stop or a weather change**, not
-  every lap — so it no longer churns. The live pit window + VE track reality
-  lap-by-lap in the Status panel; the table is the big picture.
+- **Race strategy table (Strategy tab):** the full stop-by-stop plan for the rest
+  of the race. It **re-anchors only after a real pit stop or a weather change**,
+  not every lap — so it no longer churns. The live pit window + VE track reality
+  lap-by-lap in *Next call* / the Live tab; the table is the big picture.
 - **Tyres:** used / budget (20). Red = over budget, must double-stint more. Below
   it: worst **tyre-life %** (100 = fresh), laps-on-set, a **dynamic wear-out
   estimate** (laps of life left from the *measured* wear rate, projected to the
@@ -98,12 +118,15 @@ value/units check, not a debug-from-scratch.
 - **Class-relative strip** (under the race strip, multiclass only): our **class
   position**, the **interval to the class car ahead/behind** (🅿 = that car is
   pitting), and the **class best lap**. This is the GT3 fight — the LMP/Hypercar
-  traffic doesn't matter to our result. Click it for the full timing tower.
+  traffic doesn't matter to our result. Click it (or the **Field** tab) for the
+  full timing tower + per-car detail.
 - **Weather chip:** DRY/WET plus live **track wetness %** and a drying/wetting
   arrow when it's damp.
-- **Status panel rows:** Stint pace (deg), Seat time (reg), Laps left, Stops left,
-  Avg lap, **Pace target**, **To flag**, Make finish.
-- **Events log:** every pit, weather call, incident, pace change — timestamped.
+- **Live tab (Engineer):** On track, Stint left/time, Stint pace (deg), Seat time
+  (reg), Avg lap, **Pace target**, **Damage**. Laps left / Stops left / To flag /
+  Make finish sit on the Strategy tab's *Next call* card.
+- **Events log** (Live tab): every pit, weather call, incident, pace change —
+  timestamped. ⤢ Log opens the full history.
 - **Banners (top of page):** 📻 BOX THIS LAP · 🅿 IN PITS (live pit timer) ·
   ⚑ FCY/SC cheap-stop · feed-loss. They only show when they matter.
 
@@ -145,8 +168,9 @@ the drivers later" record — it persists in the browser.
 
 ## The Strategy Brain
 
-Lives in the Status panel. It recomputes the rest of the race every update and
-grades a handful of lines against: makes the flag → most laps → fewest tyre sets.
+Lives in the **Next call** card on the Strategy tab. It recomputes the rest of the
+race every update and grades a handful of lines against: makes the flag → most
+laps → fewest tyre sets.
 
 - **Neutral "Plan is optimal":** nothing to do.
 - **Blue "◆" with an Apply button:** a better line exists. Read the one-line
@@ -220,7 +244,13 @@ The board makes this loud on purpose:
 - **What-if:** test Pit-now / Wets / Fuel-save / Push / Conserve against the
   current plan without applying anything.
 - **Fuel save:** shows the L/lap target to extend a stint or drop a stop.
-- **Lap log / Driver load / Timeline / Standings:** reference views.
+- **Lap log / Driver load / Timeline:** reference modals (ACTIONS bar).
+- **Trends / Map / Field** are now their own tabs (were pop-up buttons):
+  - **Trends:** hover any sparkline to read that lap's time / fuel / VE.
+  - **Map:** the circuit draws itself over the first lap, then loads instantly
+    (saved per track). "Clear track" re-traces it.
+  - **Field:** switch class with the buttons; LIMITS & DAMAGE now show for every
+    car (per-vehicle telemetry), our car still carries the richer damage call.
 
 ---
 
