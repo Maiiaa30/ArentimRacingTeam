@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Arentim Racing Team — Pit Wall</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b0f14'/%3E%3Ctext x='16' y='22' font-size='18' text-anchor='middle' fill='%233ea6ff' font-family='Arial' font-weight='bold'%3EA%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/style.css?v=2026-11-17m">
+<link rel="stylesheet" href="css/style.css?v=2026-11-17n">
 </head>
 <body>
 <header>
@@ -704,68 +704,90 @@ function showTab(name){
 // legacy entry points (class-relative "Standings ▸" link, etc.) now switch tabs
 function openStandings(){ showTab('field'); }
 function closeStandings(){}
+// Field tab: which class is shown (defaults to our class on first render)
+let _fieldCls = null;
+function selectFieldClass(name){ _fieldCls = name; renderStandings(); }
 function renderStandings(){
   const sb=$('standBody'); const rivals=Array.isArray(state.rivals)?state.rivals:[];
-  // remember each column's scroll so a live re-render doesn't jump back to the top
-  const _scroll={};
-  sb.querySelectorAll('.stand-col').forEach(c=>{ const l=c.querySelector('.stand-list'); if(c.dataset.cls&&l) _scroll[c.dataset.cls]=l.scrollTop; });
+  // preserve list scroll across live re-renders
+  const _prevScroll=(sb.querySelector('.stand-list')||{}).scrollTop||0;
   if(!rivals.length){ sb.innerHTML='<p class="note">No standings feed yet — appears when telemetry sends rival data.</p>'; }
   else {
-    // group by class, order fastest-first; each class gets its OWN scroll column
+    // group by class, pick which class to show (buttons). Default = OUR class.
     const groups={};
     rivals.forEach(r=>{ const m=classMeta(r.cls); (groups[m.name]=groups[m.name]||[]).push(r); });
     const names=Object.keys(groups).sort((a,b)=>{
       const ia=CLASS_ORDER.indexOf(a), ib=CLASS_ORDER.indexOf(b);
       return (ia<0?99:ia)-(ib<0?99:ib);
     });
+    const us=rivals.find(r=>r.is_us);
+    const ourCls=us?classMeta(us.cls).name:null;
+    if(!_fieldCls || !names.includes(_fieldCls)) _fieldCls = (ourCls && names.includes(ourCls)) ? ourCls : names[0];
+    const nm=_fieldCls, m=classMeta(nm);
+    // class filter buttons — our class marked
+    const btns=names.map(n=>{ const cm=classMeta(n);
+      return `<button class="fcls${n===nm?' on':''}" style="--cc:${cm.color}" onclick="selectFieldClass('${n}')">`+
+        `<span class="cls-dot"></span>${cm.name}<span class="fcls-n">${groups[n].length}</span>`+
+        `${n===ourCls?'<span class="fcls-us">YOU</span>':''}</button>`;
+    }).join('');
     const en=v=>v!=null?Math.round(v)+'%':'—';
-    const fl=fastestLaps();      // session fastest overall + per class (purple/green)
-    let cols='';
-    names.forEach(nm=>{
-      const m=classMeta(nm);
-      const rows=groups[nm].slice().sort((a,b)=>(a.pos||99)-(b.pos||99));
-      let prevGap=null, list='';
-      rows.forEach((r,ci)=>{
-        const us=r.is_us?' us':'';
-        const mf=manufMeta(r.manuf||r.name);
-        const title=((r.num?('#'+r.num+' '):'')+(r.manuf||r.name||'')).trim()||'—';
-        const team=r.team||'';
-        const driver=r.is_us ? (r.driver||state.current_driver||'—') : (r.driver||'—');
-        const gap=r.is_us?'—':(r.gap_s!=null?('+'+(+r.gap_s).toFixed(1)):'—');
-        let intv='—', intvNum=null;
-        if(ci===0) intv='LDR';
-        else if(r.gap_s!=null && prevGap!=null){ intvNum=r.gap_s-prevGap; intv=(intvNum<0?'':'+')+intvNum.toFixed(1); }
-        if(r.gap_s!=null) prevGap=r.gap_s;
-        const pit=r.in_pits?'<span class="tag-pit">PIT</span>':'';
-        const sub=[team,driver].filter(Boolean).join(' · ');
-        // broadcast touches: fastest-lap purple (overall) / green (class best),
-        // battle highlight when the interval to the car ahead is under 1s.
-        const flCls = (r.best_lap_s!=null && r.best_lap_s===fl.overall) ? 'best fl-o'
-                    : (r.best_lap_s!=null && r.best_lap_s===fl.byCls[nm]) ? 'best fl-c' : '';
-        const battle = (intvNum!=null && Math.abs(intvNum)<1.0) ? ' battle' : '';
-        list+=`<div class="srow${us}${battle}">`+
-          `<div class="srk"><b>${ci+1}</b><i>P${r.pos??'—'}</i></div>`+
-          `${badgeHtml(mf)}`+
-          `<div class="scar"><div class="scar-nm">${_esc(title)} ${pit}</div>`+
-            `<div class="scar-sub">${_esc(sub||'—')}</div></div>`+
-          `<div class="sstats">`+
-            `<div class="sst"><span>GAP</span><b>${gap}</b></div>`+
-            `<div class="sst"><span>INT</span><b class="${intv==='LDR'?'lead':''}${battle?' hot':''}">${intv}</b></div>`+
-            `<div class="sst"><span>LAST</span><b>${r.last_lap_s!=null?fmtLap(+r.last_lap_s):'—'}</b></div>`+
-            `<div class="sst"><span>BEST</span><b class="${flCls}">${r.best_lap_s!=null?fmtLap(+r.best_lap_s):'—'}</b></div>`+
-            `<div class="sst"><span>LAPS</span><b>${r.laps!=null?r.laps:'—'}</b></div>`+
-            `<div class="sst"><span>FUEL/E</span><b>${en(r.fuel_pct)}</b></div>`+
-          `</div></div>`;
-      });
-      cols+=`<div class="stand-col" data-cls="${m.name}" style="--cc:${m.color}">`+
-        `<div class="stand-col-h"><span class="cls-dot"></span>${m.name}`+
-        `<span class="cls-tag">${m.abbr}</span><span class="cls-n">${rows.length} cars</span></div>`+
-        `<div class="stand-list cscroll">${list}</div></div>`;
+    const fl=fastestLaps();
+    const dsum = (typeof Engine!=='undefined' && Engine.damageSummary) ? Engine.damageSummary(cfg,state) : null;
+    const rows=groups[nm].slice().sort((a,b)=>(a.pos||99)-(b.pos||99));
+    let prevGap=null, list='';
+    rows.forEach((r,ci)=>{
+      const isUs=!!r.is_us, usCl=isUs?' us':'';
+      const mf=manufMeta(r.manuf||r.name);
+      const title=((r.num?('#'+r.num+' '):'')+(r.manuf||r.name||'')).trim()||'—';
+      const driver=isUs ? (r.driver||state.current_driver||'—') : (r.driver||'—');
+      const sub=[r.team||'',driver].filter(Boolean).join(' · ');
+      const gap=isUs?'—':(r.gap_s!=null?('+'+(+r.gap_s).toFixed(1)):'—');
+      let intv='—', intvNum=null;
+      if(ci===0) intv='LDR';
+      else if(r.gap_s!=null && prevGap!=null){ intvNum=r.gap_s-prevGap; intv=(intvNum<0?'':'+')+intvNum.toFixed(1); }
+      if(r.gap_s!=null) prevGap=r.gap_s;
+      // status tag: DNF/DQ > pit state > nothing
+      const PST={1:'REQ',2:'IN',3:'BOX',4:'OUT'};
+      let tag='';
+      if(r.finish_status===2) tag='<span class="tag-out">DNF</span>';
+      else if(r.finish_status===3) tag='<span class="tag-out">DQ</span>';
+      else if(r.in_pits||r.pit_state>0) tag=`<span class="tag-pit">${PST[r.pit_state]||'PIT'}</span>`;
+      const flCls = (r.best_lap_s!=null && r.best_lap_s===fl.overall) ? 'best fl-o'
+                  : (r.best_lap_s!=null && r.best_lap_s===fl.byCls[nm]) ? 'best fl-c' : '';
+      const battle = (intvNum!=null && Math.abs(intvNum)<1.0) ? ' battle' : '';
+      const pen=(r.penalties!=null && r.penalties>0);
+      // us-only extras (sim exposes track-limits & damage for the ego car only)
+      let extra='';
+      if(isUs){
+        const tl = state.track_limits!=null ? state.track_limits : null;
+        const dmg = dsum ? (dsum.mandatory?'PIT!':(dsum.worst>0?dsum.worst+'%':'OK')) : '—';
+        const dmgCls = dsum ? (dsum.mandatory||dsum.severe?'bad':dsum.worst===0?'ok':'warn') : '';
+        extra =
+          `<div class="sst"><span>LIMITS</span><b class="${tl>0?'warn':''}">${tl!=null?tl:'—'}</b></div>`+
+          `<div class="sst"><span>DAMAGE</span><b class="${dmgCls}">${dmg}</b></div>`;
+      }
+      list+=`<div class="srow${usCl}${battle}">`+
+        `<div class="srk"><b>${ci+1}</b><i>P${r.pos??'—'}</i></div>`+
+        `${badgeHtml(mf)}`+
+        `<div class="scar"><div class="scar-nm">${_esc(title)} ${tag}</div>`+
+          `<div class="scar-sub">${_esc(sub||'—')}</div></div>`+
+        `<div class="sstats">`+
+          `<div class="sst"><span>GAP</span><b>${gap}</b></div>`+
+          `<div class="sst"><span>INT</span><b class="${intv==='LDR'?'lead':''}${battle?' hot':''}">${intv}</b></div>`+
+          `<div class="sst"><span>LAST</span><b>${r.last_lap_s!=null?fmtLap(+r.last_lap_s):'—'}</b></div>`+
+          `<div class="sst"><span>BEST</span><b class="${flCls}">${r.best_lap_s!=null?fmtLap(+r.best_lap_s):'—'}</b></div>`+
+          `<div class="sst"><span>LAPS</span><b>${r.laps!=null?r.laps:'—'}</b></div>`+
+          `<div class="sst"><span>ENERGY</span><b>${en(r.fuel_pct)}</b></div>`+
+          `<div class="sst"><span>STOPS</span><b>${r.pit_stops!=null?r.pit_stops:'—'}</b></div>`+
+          `<div class="sst"><span>PEN</span><b class="${pen?'bad':''}">${r.penalties!=null?r.penalties:'—'}</b></div>`+
+          extra+
+        `</div></div>`;
     });
-    sb.innerHTML=`<div class="stand-cols">${cols}</div>`;
-    // restore the scroll positions captured before the rebuild
-    sb.querySelectorAll('.stand-col').forEach(c=>{ const l=c.querySelector('.stand-list');
-      if(c.dataset.cls&&l&&_scroll[c.dataset.cls]!=null) l.scrollTop=_scroll[c.dataset.cls]; });
+    sb.innerHTML=
+      `<div class="field-tabs">${btns}</div>`+
+      `<div class="stand-col" data-cls="${m.name}" style="--cc:${m.color}"><div class="stand-list cscroll">${list}</div></div>`+
+      `<p class="note">LIMITS &amp; DAMAGE shown for our car only — the sim reports those for your own car, not rivals.</p>`;
+    const nl=sb.querySelector('.stand-list'); if(nl) nl.scrollTop=_prevScroll;
   }
   // our sectors
   const se=$('sectorBody'); const s=state.sectors;

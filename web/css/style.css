@@ -712,6 +712,21 @@ label.fld{display:flex;justify-content:space-between;align-items:center;gap:10px
 }
 .tag-pit{font-family:var(--mono);font-size:10px;font-weight:700;color:#0b0e13;background:#ffce45;
   border-radius:3px;padding:1px 5px;margin-left:6px;vertical-align:middle}
+.tag-out{font-family:var(--mono);font-size:10px;font-weight:700;color:#fff;background:var(--bad);
+  border-radius:3px;padding:1px 5px;margin-left:6px;vertical-align:middle;letter-spacing:.5px}
+/* Field: per-cell status colours */
+.sst b.bad{color:var(--bad)} .sst b.ok{color:var(--ok)} .sst b.warn{color:var(--warn)}
+/* Field: class filter buttons (default = our class) */
+.field-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 12px}
+.fcls{display:inline-flex;align-items:center;gap:8px;background:#0e1219;
+  border:1px solid var(--line2);border-radius:999px;padding:7px 14px;cursor:pointer;
+  font-weight:700;font-size:13px;color:var(--mut);transition:.15s}
+.fcls:hover{color:var(--txt);border-color:var(--cc)}
+.fcls .cls-dot{width:9px;height:9px;border-radius:50%;background:var(--cc);display:inline-block}
+.fcls.on{color:var(--txt);border-color:var(--cc);background:color-mix(in srgb,var(--cc) 16%,#0e1219)}
+.fcls-n{font-family:var(--mono);font-size:11px;color:var(--mut);font-weight:700}
+.fcls-us{font-size:9px;font-weight:800;letter-spacing:1px;color:#0b0e13;background:var(--cc);
+  border-radius:3px;padding:1px 5px}
 
 /* default-strategy view */
 #defBody{flex:1 1 auto;min-height:0;overflow:auto;margin-top:6px}

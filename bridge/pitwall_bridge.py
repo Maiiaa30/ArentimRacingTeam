@@ -304,6 +304,10 @@ def read_state(info):
                 "laps": g(v, "mTotalLaps"),
                 "fuel_pct": fuel_pct,
                 "in_pits": bool(g(v, "mInPits", 0)),
+                "pit_state": g(v, "mPitState"),          # 0 none,1 req,2 enter,3 stopped,4 exit
+                "pit_stops": g(v, "mNumPitstops"),       # pit stops made so far
+                "penalties": g(v, "mNumPenalties"),      # outstanding penalties
+                "finish_status": g(v, "mFinishStatus"),  # 0 none,1 finished,2 dnf,3 dq
                 "is_us": (g(v, "mID") == my_id) if my_id is not None else False,
             })
     except Exception:
@@ -445,7 +449,14 @@ def demo_state(tick):
              "last_lap_s": round((95.0 - (8 if cl == "Hypercar" else 0)) + p * 0.2, 3),
              "best_lap_s": round((95.0 - (8 if cl == "Hypercar" else 0)) - 0.4, 3),
              "laps": lap + (int(lap * 0.08) if cl == "Hypercar" else 0),
-             "in_pits": False, "is_us": num == "38"}
+             "fuel_pct": max(5, 100 - (tick % 48) * 2),
+             # demo: a couple of cars in the pits / with a penalty so the field view shows them
+             "in_pits": (p in (2, 6) and (tick % 40) < 6),
+             "pit_state": (3 if (p in (2, 6) and (tick % 40) < 6) else 0),
+             "pit_stops": 1 + (lap // 24),
+             "penalties": (1 if p == 4 else 0),
+             "finish_status": 0,
+             "is_us": num == "38"}
             for p, (num, mf, mdl, tm, dr, cl) in enumerate([
                 ("7", "Toyota", "GR010 Hybrid", "Toyota Gazoo Racing", "Kobayashi", "Hypercar"),
                 ("51", "Ferrari", "499P", "Ferrari AF Corse", "Pier Guidi", "Hypercar"),
