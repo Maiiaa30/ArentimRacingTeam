@@ -17,23 +17,30 @@ body{background:
   display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
 @media(min-width:901px){ header{flex:0 0 auto} }
 
-/* TALL desktop only (enough vertical room): bound the page to the viewport so the
-   whole board sits on one screen — the mid row fills the space under the tiles,
-   the strategy table scrolls INSIDE its column, status scrolls inside its own,
-   and the events panel keeps a fixed slice at the bottom. A SHORT landscape
-   monitor (e.g. 1366x768) can't fit all this, so below 880px tall we DON'T clamp:
-   the page keeps natural scroll and panels take their natural height — content
-   flows top-to-bottom with no overlap, the user just scrolls. */
-@media(min-width:1181px) and (min-height:880px){
-  html,body{height:100dvh}
-  body{overflow:hidden}
-  .grid.mid{flex:1 1 auto;min-height:0;align-items:stretch;grid-template-rows:minmax(0,1fr)}
-  .strat{min-height:0;overflow:hidden}
-  .strat .tbl-scroll{flex:1 1 auto;max-height:none;min-height:0}
-  .statuscol{min-height:0;overflow-y:auto}
-  .evpanel{flex:0 0 auto}
-  .evpanel .ev-log{max-height:160px}
-}
+/* ---- tabbed views: one focused screen at a time (no nested panels/scrollbars) ----
+   A slim KPI header (tiles + strips + weather) stays on top; the tab bar is sticky
+   so it's always reachable; only the active view renders below. The page scrolls
+   naturally if a view is tall — no fit-to-screen clamp, no scroll-inside-scroll. */
+.tabs{display:flex;gap:2px;flex:0 0 auto;border-bottom:1px solid var(--line);
+  position:sticky;top:0;z-index:30;background:var(--bg);
+  overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{appearance:none;background:transparent;border:0;border-bottom:2px solid transparent;
+  color:var(--mut);font-family:var(--sans);font-weight:700;letter-spacing:.6px;
+  font-size:clamp(13px,1.5vw,15px);padding:11px 18px;cursor:pointer;white-space:nowrap;
+  text-transform:uppercase;transition:color .12s ease,border-color .12s ease}
+.tab:hover{color:var(--txt)}
+.tab.active{color:var(--txt);border-bottom-color:var(--red)}
+.view{display:none;flex:1 1 auto;min-height:0}
+.view.active{display:block}
+.vgrid{display:grid;gap:clamp(10px,1.5vw,16px);align-items:start}
+.vgrid.v-2{grid-template-columns:1.6fr 1fr}
+.vgrid.v-3{grid-template-columns:1fr 1fr 1fr}
+@media(max-width:1180px){ .vgrid.v-2,.vgrid.v-3{grid-template-columns:1fr 1fr} }
+@media(max-width:760px){ .vgrid.v-2,.vgrid.v-3{grid-template-columns:1fr} }
+/* persistent action bar — always reachable at the foot of the page */
+.actionbar{display:flex;flex-wrap:wrap;gap:8px;flex:0 0 auto;
+  padding-top:12px;margin-top:4px;border-top:1px solid var(--line)}
 
 /* ---- top bar ---- */
 header{position:relative;display:flex;align-items:center;gap:14px;
@@ -65,19 +72,12 @@ header::before{content:"";position:absolute;left:0;top:0;right:0;height:2px;
   flex:1;min-height:0;display:flex;flex-direction:column;gap:clamp(10px,1.5vw,16px)}
 .grid{display:grid;gap:clamp(10px,1.5vw,16px)}
 .big3{grid-template-columns:repeat(3,1fr);flex:0 0 auto}
-/* three columns: strategy (wide) | status | tires. Columns size to content and
-   align to the top so a short strategy table doesn't leave a tall void. */
-.mid{grid-template-columns:1.55fr 1.15fr 1fr;align-items:start}
 .strat{display:flex;flex-direction:column}
-/* strategy table shows its rows at natural height; scrolls internally only if
-   the plan is unusually long */
-.strat .tbl-scroll{max-height:62vh;overflow:auto}
-/* events + actions span the full width below the mid row */
+/* strategy table shows its rows at natural height; scrolls internally only if the
+   plan is unusually long (the whole Strategy view otherwise fits) */
+.strat .tbl-scroll{max-height:68vh;overflow:auto}
 .evpanel{display:flex;flex-direction:column}
-.evpanel .ev-log{min-height:80px;max-height:240px;overflow:auto}
-/* keep the legacy rightcol rule harmless if referenced elsewhere */
-.rightcol{grid-template-columns:1fr 1fr}
-@media(max-width:1180px){ .mid{grid-template-columns:1fr 1fr} .strat{grid-column:1 / -1} }
+.evpanel .ev-log{min-height:80px;max-height:340px;overflow:auto}
 
 /* ---- weather timeline strip ---- */
 .wx-strip{display:flex;align-items:center;gap:12px;flex:0 0 auto}
@@ -749,7 +749,7 @@ tr.splash td{opacity:.72}
 @media(max-width:700px){ .trend-ov{grid-template-columns:repeat(2,1fr)} }
 
 /* ---- track map modal ---- */
-.trkmap{width:100%;height:auto;display:block;border:1px solid var(--line);border-radius:10px;margin-top:10px}
+.trkmap{width:100%;height:auto;max-height:min(66vh,calc(100vh - 470px));display:block;border:1px solid var(--line);border-radius:10px;margin-top:10px}
 .trk-bg{fill:#0a0d12}
 .trk-path{fill:none;stroke:#3a4556;stroke-width:6;stroke-linejoin:round;stroke-linecap:round;opacity:.9}
 .trk-num{fill:#cdd5df;font-family:var(--mono);font-size:10px;font-weight:700}

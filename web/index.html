@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Arentim Racing Team — Pit Wall</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b0f14'/%3E%3Ctext x='16' y='22' font-size='18' text-anchor='middle' fill='%233ea6ff' font-family='Arial' font-weight='bold'%3EA%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/style.css?v=2026-11-17j">
+<link rel="stylesheet" href="css/style.css?v=2026-11-17l">
 </head>
 <body>
 <header>
@@ -67,36 +67,53 @@
     </div>
   </div>
 
-  <div class="grid mid">
-    <!-- plan -->
-    <div class="panel strat">
-      <h2>Race strategy</h2>
-      <div class="plan-stats" id="planStats"></div>
-      <div class="tbl-scroll cscroll">
-        <table>
-          <thead><tr><th>#</th><th>Drv</th><th>Lap</th><th>Clock</th><th>Tire</th><th>Act</th><th>Fuel</th><th>Laps</th><th>Stint</th></tr></thead>
-          <tbody id="plan"></tbody>
-        </table>
-      </div>
-      <p class="note" id="planSummary"></p>
-    </div>
+  <!-- TAB NAV — one focused view at a time (no nested panels) -->
+  <nav class="tabs" id="tabnav">
+    <button class="tab active" data-tab="strat" onclick="showTab('strat')">Strategy</button>
+    <button class="tab" data-tab="live" onclick="showTab('live')">Live</button>
+    <button class="tab" data-tab="trends" onclick="showTab('trends')">Trends</button>
+    <button class="tab" data-tab="map" onclick="showTab('map')">Map</button>
+    <button class="tab" data-tab="field" onclick="showTab('field')">Field</button>
+  </nav>
 
-    <!-- status -->
-      <div class="panel statuscol">
-        <h2>Status</h2>
+  <!-- ===== STRATEGY ===== -->
+  <section class="view active" id="v-strat">
+    <div class="vgrid v-2">
+      <div class="panel strat">
+        <h2>Race strategy</h2>
+        <div class="plan-stats" id="planStats"></div>
+        <div class="tbl-scroll cscroll">
+          <table>
+            <thead><tr><th>#</th><th>Drv</th><th>Lap</th><th>Clock</th><th>Tire</th><th>Act</th><th>Fuel</th><th>Laps</th><th>Stint</th></tr></thead>
+            <tbody id="plan"></tbody>
+          </table>
+        </div>
+        <p class="note" id="planSummary"></p>
+      </div>
+      <div class="panel">
+        <h2>Next call</h2>
         <div class="brain" id="brain"></div>
         <div class="nextstop" id="nextStop"></div>
+        <div class="kv"><span class="k">Laps left</span><span class="v" id="lapsLeft">—</span></div>
+        <div class="kv"><span class="k">Stops left</span><span class="v" id="stops">—</span></div>
+        <div class="kv"><span class="k">To flag</span><span class="v" id="toFlag">—</span></div>
+        <div class="kv"><span class="k">Make finish</span><span id="finish"></span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== LIVE ===== -->
+  <section class="view" id="v-live">
+    <div class="vgrid v-3">
+      <div class="panel">
+        <h2>Engineer</h2>
         <div class="kv"><span class="k">On track</span><span class="v" id="driver">—</span></div>
         <div class="kv"><span class="k">Stint left</span><span class="v" id="stintLeft">—</span></div>
         <div class="kv"><span class="k">Stint time</span><span class="v" id="stintTime">—</span></div>
         <div class="kv"><span class="k">Stint pace</span><span class="v" id="stintPace">—</span></div>
         <div class="kv"><span class="k">Seat time</span><span class="v" id="seatTime">—</span></div>
-        <div class="kv"><span class="k">Laps left</span><span class="v" id="lapsLeft">—</span></div>
-        <div class="kv"><span class="k">Stops left</span><span class="v" id="stops">—</span></div>
         <div class="kv"><span class="k">Avg lap</span><span class="v" id="avg">—</span></div>
         <div class="kv"><span class="k">Pace target</span><span class="v" id="paceTarget">—</span></div>
-        <div class="kv"><span class="k">To flag</span><span class="v" id="toFlag">—</span></div>
-        <div class="kv"><span class="k">Make finish</span><span id="finish"></span></div>
       </div>
       <div class="panel">
         <h2>Tires</h2>
@@ -110,31 +127,57 @@
         <div class="note" id="psiHint"></div>
         <div class="twheels" id="twheels"></div>
       </div>
-    </div>
-
-    <!-- events / actions — full width below -->
       <div class="panel evpanel">
         <h2>Events <span class="ev-count" id="evCount">0</span>
           <button class="ev-expand" id="evExpand" onclick="openEvents()" title="Full event history">⤢ Log</button>
         </h2>
-        <div class="btns">
-          <button class="alert" onclick="ev('rain_now')">Rain NOW</button>
-          <button onclick="ev('dry_up')">Dry up</button>
-          <button class="alert" onclick="ev('forced_pit')">Forced Pit</button>
-          <button onclick="ev('pace_change')">Pace Change</button>
-          <button onclick="openWif()">What-if</button>
-          <button onclick="openFuel()">Fuel save</button>
-          <button onclick="openLaps()">Lap log</button>
-          <button onclick="openTrends()">Trends</button>
-          <button onclick="openMap()">Track map</button>
-          <button onclick="openDrivers()">Driver load</button>
-          <button onclick="openTimeline()">Timeline</button>
-          <button onclick="openStandings()">Standings</button>
-          <button onclick="openDefaultStrat()">Default strat</button>
-        </div>
-        <p class="note">Locks past stints, regenerates the rest of the race.</p>
         <div id="evLog" class="ev-log cscroll"></div>
       </div>
+    </div>
+  </section>
+
+  <!-- ===== TRENDS ===== -->
+  <section class="view" id="v-trends">
+    <div class="panel">
+      <h2>Trends</h2>
+      <p class="note" style="margin-top:4px">Measured from the live lap stream — lap time, fuel burn and VE drain across the race, overall and per stint. A stint = a fuel load (resets each pit / driver swap).</p>
+      <div id="trendBody"></div>
+    </div>
+  </section>
+
+  <!-- ===== MAP ===== -->
+  <section class="view" id="v-map">
+    <div class="panel">
+      <h2>Track map <span class="chip" id="mapCars">—</span></h2>
+      <p class="note" style="margin-top:4px">Live positions from the game. The track is identified by name and traced from our car's first lap, then saved — so next time it loads instantly. Dots are cars, coloured by class — ours ringed in white. Needs the bridge running.</p>
+      <div id="mapBody"></div>
+      <div class="btns" style="margin-top:8px"><button onclick="clearTrackOutline()">Clear track</button></div>
+    </div>
+  </section>
+
+  <!-- ===== FIELD (standings) ===== -->
+  <section class="view" id="v-field">
+    <div class="panel">
+      <h2>Standings &amp; rivals</h2>
+      <p class="note" style="margin-top:0">Live field — gaps, pace and pit status. Our car highlighted. Sector times for our last lap below.</p>
+      <div id="standBody" class="cscroll"></div>
+      <div id="sectorBody"></div>
+    </div>
+  </section>
+
+  <!-- PERSISTENT ACTIONS — always reachable, never nested -->
+  <div class="actionbar">
+    <button class="alert" onclick="ev('rain_now')">Rain NOW</button>
+    <button onclick="ev('dry_up')">Dry up</button>
+    <button class="alert" onclick="ev('forced_pit')">Forced Pit</button>
+    <button onclick="ev('pace_change')">Pace</button>
+    <button onclick="openWif()">What-if</button>
+    <button onclick="openFuel()">Fuel save</button>
+    <button onclick="openLaps()">Lap log</button>
+    <button onclick="openDrivers()">Driver load</button>
+    <button onclick="openTimeline()">Timeline</button>
+    <button onclick="openDefaultStrat()">Default strat</button>
+  </div>
 </div>
 
 <!-- full event history modal -->
@@ -178,17 +221,6 @@
     <h2>Car condition</h2>
     <div id="dmgDetails"></div>
     <div id="dmgRec" class="rec"></div>
-  </div>
-</div>
-
-<!-- standings / rivals modal -->
-<div class="modal-bg" id="standModal">
-  <div class="modal wide xl">
-    <button class="x" onclick="closeStandings()">✕</button>
-    <h2>Standings &amp; rivals</h2>
-    <p class="note" style="margin-top:0">Live field — gaps, pace and pit status. Our car highlighted. Sector times for our last lap below.</p>
-    <div id="standBody" class="cscroll"></div>
-    <div id="sectorBody"></div>
   </div>
 </div>
 
@@ -253,27 +285,6 @@
     <p class="note" style="margin-top:8px">Each completed lap recorded from the live stream — driver, time, fuel, tyre life. Export for post-race review.</p>
     <div id="lapPace"></div>
     <div id="lapBody"></div>
-  </div>
-</div>
-
-<!-- track map modal: self-drawing circuit from our position trail + live car dots -->
-<div class="modal-bg" id="mapModal">
-  <div class="modal wide">
-    <button class="x" onclick="closeMap()">✕</button>
-    <h2>Track map <span class="chip" id="mapCars">—</span></h2>
-    <p class="note" style="margin-top:4px">Live positions from the game. The track is identified by name and its shape traced from our car's first lap, then saved — so next time it loads instantly. Dots are cars, coloured by class — ours ringed in white. Needs the bridge running (sends world coordinates).</p>
-    <div id="mapBody"></div>
-    <div class="btns" style="margin-top:8px"><button onclick="clearTrackOutline()">Clear track</button></div>
-  </div>
-</div>
-
-<!-- trends modal: fuel/lap + lap-time + VE over the race, overall and per stint -->
-<div class="modal-bg" id="trendModal">
-  <div class="modal wide">
-    <button class="x" onclick="closeTrends()">✕</button>
-    <h2>Trends</h2>
-    <p class="note" style="margin-top:4px">Measured from the live lap stream — lap time, fuel burn and VE drain across the race, overall and per stint. A stint = a fuel load (resets each pit / driver swap).</p>
-    <div id="trendBody"></div>
   </div>
 </div>
 
@@ -678,8 +689,19 @@ function badgeHtml(mf){
     `onerror="this.parentNode.classList.add('nologo');this.remove();"><span class="mono">${mf.s}</span></span>`;
   return `<span class="mbadge nologo" style="--mc:${mf.c}"><span class="mono">${mf.s}</span></span>`;
 }
-function openStandings(){ const m=$('standModal'); m.classList.add('open'); renderStandings(); }
-function closeStandings(){ $('standModal').classList.remove('open'); }
+// --- tab navigation: one focused view at a time ---
+function tabActive(name){ const v=document.getElementById('v-'+name); return !!(v && v.classList.contains('active')); }
+function showTab(name){
+  document.querySelectorAll('.view').forEach(v=> v.classList.toggle('active', v.id==='v-'+name));
+  document.querySelectorAll('#tabnav .tab').forEach(t=> t.classList.toggle('active', t.dataset.tab===name));
+  if(name==='trends') renderTrends();
+  else if(name==='map') renderMap();
+  else if(name==='field') renderStandings();
+  window.scrollTo(0,0);
+}
+// legacy entry points (class-relative "Standings ▸" link, etc.) now switch tabs
+function openStandings(){ showTab('field'); }
+function closeStandings(){}
 function renderStandings(){
   const sb=$('standBody'); const rivals=Array.isArray(state.rivals)?state.rivals:[];
   // remember each column's scroll so a live re-render doesn't jump back to the top
@@ -1557,7 +1579,7 @@ function captureLap(lapNo){
   });
   saveLapLog();
   if(document.getElementById('lapModal').classList.contains('open')) renderLapLog();
-  if(document.getElementById('trendModal').classList.contains('open')) renderTrends();
+  if(tabActive('trends')) renderTrends();
 }
 function renderLapLog(){
   const best = lapLog.reduce((m,r)=> (r.lap_s!=null && (m==null||r.lap_s<m)) ? r.lap_s : m, null);
@@ -1619,10 +1641,10 @@ function captureTrackPos(){
     if(trackTrail.length>=40){ trackOutline = trackTrail.slice(); saveOutline(trackName, trackOutline); }
     _lastMapLap = state.laps_done;
   }
-  if(document.getElementById('mapModal').classList.contains('open')) renderMap();
+  if(tabActive('map')) renderMap();
 }
-function openMap(){ renderMap(); $('mapModal').classList.add('open'); }
-function closeMap(){ $('mapModal').classList.remove('open'); }
+function openMap(){ showTab('map'); }
+function closeMap(){}
 function clearTrackOutline(){
   trackTrail=[]; _lastTrailPt=null; trackOutline=null;
   try { if(trackName) localStorage.removeItem(TRACK_KEY+_trackSlug(trackName)); } catch(e){}
@@ -1677,8 +1699,8 @@ function renderMap(){
 }
 
 // ---- trends: fuel/lap + lap-time + VE across the race, overall and per stint ----
-function openTrends(){ renderTrends(); $('trendModal').classList.add('open'); }
-function closeTrends(){ $('trendModal').classList.remove('open'); }
+function openTrends(){ showTab('trends'); }
+function closeTrends(){}
 const _avg = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : null;
 // least-squares slope of y over its own index (seconds per lap of drift)
 function _slope(ys){
@@ -2282,7 +2304,7 @@ PitDB.onState(s => {
   state.laps_on_tires = (state.laps_done!=null) ? Math.max(0, state.laps_done - _stintStartLap) : null;
   state.stint_time_s  = (state.elapsed_s!=null && _stintStartEl!=null) ? Math.max(0, state.elapsed_s - _stintStartEl) : null;
   _lastFeed = Date.now(); updateConn();
-  if(document.getElementById('standModal').classList.contains('open')) renderStandings();
+  if(tabActive('field')) renderStandings();
   if(_syncInit){
     // first snapshot = just seed the baseline, don't synthesize a lap history
     _lastLoggedLap = state.laps_done; _syncInit = false;
