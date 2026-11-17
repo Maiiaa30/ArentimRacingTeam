@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Arentim Racing Team — Pit Wall</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b0f14'/%3E%3Ctext x='16' y='22' font-size='18' text-anchor='middle' fill='%233ea6ff' font-family='Arial' font-weight='bold'%3EA%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -222,6 +223,7 @@
     <button class="x" onclick="closeDrivers()">✕</button>
     <h2>Driver load — planned</h2>
     <p class="note" style="margin-top:0">Stints, laps and time per driver in the current plan. Balance swaps before the race.</p>
+    <div class="btns" style="margin-top:0"><button class="alert" onclick="confirmResetSession()">Clear session history</button></div>
     <div id="drvBody"></div>
   </div>
 </div>
@@ -426,7 +428,12 @@ function toFlagCalc(m, futureStops, veRate, fplMeasured){
   if(state.fuel_now!=null){
     const fpl = (fplMeasured && fplMeasured>0) ? fplMeasured : cfg.fuel_per_lap;
     if(fpl>0){
-      const avail = state.fuel_now + futureStops*(cfg.tank_cap||0);
+      // each stop adds a realistic splash (one VE-window stint + margin), NOT a
+      // full tank — the GT3 never fills the 120 L tank, it fuels to the stint.
+      // Use the live reported capacity when present, else the config tank.
+      const cap = (state.fuel_capacity && state.fuel_capacity>0) ? state.fuel_capacity : (cfg.tank_cap||0);
+      const perStop = Math.min(cap, (cfg.max_stint_laps||24)*fpl + (cfg.fuel_margin_laps||0)*fpl);
+      const avail = state.fuel_now + futureStops*perStop;
       legs.push({ u:'Fuel', margin: avail/fpl - lapsLeft });
     }
   }
@@ -441,13 +448,18 @@ function toFlagCalc(m, futureStops, veRate, fplMeasured){
 function seatTimeCalc(){
   const d = state.current_driver;
   if(!d || d==='—') return null;
-  // total = sum of completed stints by this driver + the live continuous block
+  // total = sum of this driver's completed stints + ONLY the current open stint.
+  // (completed fuel-only stints inside the continuous block are already in
+  // stintLog, so adding the whole continuous block here would double-count them.)
   let total = 0;
   stintLog.forEach(s=>{ if(s.driver===d && s.durEl!=null) total += s.durEl; });
+  const liveStint = (state.elapsed_s!=null && _stintStartEl!=null)
+    ? Math.max(0, state.elapsed_s - _stintStartEl) : (state.stint_time_s||0);
+  total += liveStint;
+  // continuous = unbroken time at the wheel (spans the fuel-only stints) — for
+  // the reg check, NOT summed into total.
   const continuous = (_driverSeatStartEl!=null && state.elapsed_s!=null)
-    ? Math.max(0, state.elapsed_s - _driverSeatStartEl) : (state.stint_time_s||0);
-  // the live continuous block isn't in stintLog yet — add it to the total too
-  total += continuous;
+    ? Math.max(0, state.elapsed_s - _driverSeatStartEl) : liveStint;
   const maxC = cfg.driver_max_consecutive_min ? cfg.driver_max_consecutive_min*60 : null;
   const maxT = cfg.driver_max_total_min ? cfg.driver_max_total_min*60 : null;
   return { total, continuous, maxC, maxT,
@@ -468,7 +480,8 @@ function undercutCalc(){
     if(gb > drop){ out.behind = { safe:true, by: gb-drop }; }
     else { out.behind = { safe:false, by: drop-gb }; }
   }
-  if(ga!=null && ga < drop){ out.undercut = { by: drop-ga }; }  // we'd rejoin ahead-ish
+  // undercut only makes sense if there's a car ahead to catch (not the leader)
+  if(ga!=null && ga>0 && ga < drop && pos!=null && pos>1){ out.undercut = { by: drop-ga }; }
   return out;
 }
 
@@ -484,10 +497,11 @@ function pushTemp(){
 function tempTrendCalc(){
   if(state.track_temp==null) return null;
   pushTemp();
-  // compare to a reading ~5 min old
-  const old = _tempLog.find(e=> Date.now()-e.ts <= 330000 && Date.now()-e.ts >= 180000)
-            || _tempLog[0];
-  const delta = (old && old.ts !== _tempLog[_tempLog.length-1]?.ts) ? state.track_temp-old.track : 0;
+  // trend vs a reading ~3-5 min old. If we don't have one yet (startup / feed
+  // gap) report a flat trend rather than comparing against a seconds-old sample
+  // and labelling it "~5 min".
+  const old = _tempLog.find(e=> Date.now()-e.ts <= 330000 && Date.now()-e.ts >= 180000);
+  const delta = old ? state.track_temp-old.track : 0;
   const arrow = delta > 0.3 ? '↑' : delta < -0.3 ? '↓' : '→';
   const psiAdj = (state.track_temp - (cfg.ref_track_temp_c||30)) * (cfg.psi_per_degC||0);
   return { track: state.track_temp, air: state.air_temp, arrow, delta, psiAdj };
@@ -766,7 +780,9 @@ function render(){
   if(fcy){
     const fl = (state.flag||'green').toLowerCase();
     const slow = fl==='fcy' || fl==='yellow' || fl==='sc' || fl==='safety';
-    const nearStop = m.pit_in_laps <= 6;
+    // only trust pit_in when fuel is live — without it pit_in can read 0 and
+    // falsely trigger the cheap-stop prompt under any yellow.
+    const nearStop = haveFuel && m.pit_in_laps <= 6;
     if(slow && nearStop && !state.in_pits){
       const saved = Math.round((cfg.pit_loss_s||60) * 0.45);  // ~rough time clawed back
       const label = fl==='fcy' ? 'FULL-COURSE YELLOW' : fl==='sc'||fl==='safety' ? 'SAFETY CAR' : 'YELLOW';
@@ -1450,10 +1466,11 @@ function renderDrivers(){
     const seat = {};
     stintLog.forEach(s=>{ const d=s.driver||'—'; seat[d]=(seat[d]||0)+(s.durEl||0); });
     if(_curStint && state.current_driver){
-      const live = (_driverSeatStartEl!=null && state.elapsed_s!=null)
-        ? Math.max(0, state.elapsed_s - _driverSeatStartEl) : 0;
-      // the live continuous block isn't in stintLog yet
-      seat[state.current_driver] = (seat[state.current_driver]||0) + live;
+      // add ONLY the current open stint (not the whole continuous block — its
+      // completed fuel-only stints are already summed from stintLog above).
+      const liveStint = (state.elapsed_s!=null && _stintStartEl!=null)
+        ? Math.max(0, state.elapsed_s - _stintStartEl) : 0;
+      seat[state.current_driver] = (seat[state.current_driver]||0) + liveStint;
     }
     const seatNames = Object.keys(seat);
     if(seatNames.length){
@@ -1660,6 +1677,7 @@ const LIVE_FIELDS = ['fuel_now','fuel_capacity','virtual_energy','state_of_charg
 let _syncInit = true, _lastFeed = null, _pitActive = false;
 let _stintStartLap = null, _stintStartEl = null;   // for derived stint/tyre context
 let _lastRegenWx = null;
+let _lastSeenEl = null, _lastLiveSave = 0;         // new-session detect + persist throttle
 
 // ---- real stint log + per-driver/per-stint incident tracking ----
 // Captures what actually happened each stint (driver, laps, best lap, tyre life
@@ -1672,33 +1690,59 @@ function saveStints(){ try{ localStorage.setItem(STINT_KEY, JSON.stringify(stint
 let _curStint = null;       // accumulator for the stint in progress
 let _pendStint = null;      // finalized stint awaiting its pit time
 let _pitStartEl = null;     // elapsed_s at pit entry (pit-timer + pit duration)
-let _lastImpactAgo = null;  // edge-detect new contacts (ago resets to ~0 on impact)
+let _lastImpactT = null;    // elapsed_s of the last counted impact (edge-detect)
 let _curDriverName = null;      // detect a real driver swap (name change)
 let _driverSeatStartEl = null;  // elapsed_s when the current driver got in (seat-time reg)
+
+// Persist the live trackers so an operator page-reload mid-race keeps seat-time
+// and stint continuity (elapsed_s is race time, stable across reloads).
+const LIVE_KEY = 'arentim_pitwall_live';
+function saveLive(){
+  try { localStorage.setItem(LIVE_KEY, JSON.stringify({
+    curDriver:_curDriverName, seatStartEl:_driverSeatStartEl,
+    stintStartLap:_stintStartLap, stintStartEl:_stintStartEl, lastImpactT:_lastImpactT
+  })); } catch(e){}
+}
+function loadLive(){
+  try {
+    const v = JSON.parse(localStorage.getItem(LIVE_KEY)||'null');
+    if(v && typeof v==='object'){
+      _curDriverName=v.curDriver??null; _driverSeatStartEl=v.seatStartEl??null;
+      _stintStartLap=v.stintStartLap??null; _stintStartEl=v.stintStartEl??null;
+      _lastImpactT=v.lastImpactT??null;
+    }
+  } catch(e){}
+}
 
 function _worstTyreLife(){
   if(!state.wheels || !state.wheels.length) return null;
   const worn = Math.max(0, ...state.wheels.map(w=>w.wear||0));
   return Math.round(100 - worn*100);
 }
+function _impactT(){   // elapsed time of the current reported impact, or null
+  return (state.last_impact_ago_s!=null && state.elapsed_s!=null)
+    ? state.elapsed_s - state.last_impact_ago_s : null;
+}
 function startStint(){
   _curStint = { driver: state.current_driver||'—', startLap: state.laps_done||0,
     startEl: state.elapsed_s||0, bestLap: null, laps: 0,
     contacts: 0, offtracks: 0, tlBase: (state.track_limits!=null?state.track_limits:null) };
-  _lastImpactAgo = state.last_impact_ago_s;
+  // seed impact baseline so a pre-existing impact at stint start isn't re-counted
+  _lastImpactT = _impactT();
 }
 function accumStint(){
   if(!_curStint) startStint();
-  // best lap this stint
-  if(state.last_lap_s!=null && state.last_lap_s>0)
+  // best lap THIS stint only: state.last_lap_s still holds the previous stint's
+  // last lap until an out-lap completes, so ignore it until laps advance.
+  if(state.last_lap_s!=null && state.last_lap_s>0 && (state.laps_done||0) > _curStint.startLap)
     _curStint.bestLap = _curStint.bestLap==null ? state.last_lap_s : Math.min(_curStint.bestLap, state.last_lap_s);
   _curStint.laps = Math.max(0, (state.laps_done||0) - _curStint.startLap);
-  // contact: last_impact_ago_s jumps DOWN (new impact) with real magnitude
-  const ago = state.last_impact_ago_s, mag = state.last_impact_mag;
-  if(ago!=null && mag && mag>0.2){
-    if(_lastImpactAgo==null ? ago<3 : ago < _lastImpactAgo-0.4) _curStint.contacts++;
+  // contact: detect by impact TIMESTAMP (elapsed - ago), robust to back-to-back
+  // hits that the raw ago-drop test missed when ago was already small.
+  const mag = state.last_impact_mag, it = _impactT();
+  if(it!=null && mag && mag>0.2){
+    if(_lastImpactT==null || Math.abs(it - _lastImpactT) > 0.5){ _curStint.contacts++; _lastImpactT = it; }
   }
-  _lastImpactAgo = ago;
   // off-track: cumulative track_limits steps delta since stint start
   if(state.track_limits!=null){
     if(_curStint.tlBase==null) _curStint.tlBase = state.track_limits;
@@ -1719,6 +1763,22 @@ function commitStintWithPit(){   // on pit EXIT: attach pit time, store, start f
     stintLog.push(_pendStint); saveStints(); _pendStint=null;
   }
   startStint();
+  saveLive();
+}
+// Wipe all per-session history (stint log, incidents, lap log, live trackers).
+// Called on a detected new session, or manually from the Driver-load panel, so a
+// previous race's data can never leak into "this session" totals / seat time.
+function resetSessionData(){
+  stintLog = []; saveStints();
+  lapLog = []; try{ saveLapLog(); }catch(e){}
+  _curStint = null; _pendStint = null; _pitStartEl = null; _lastImpactT = null;
+  _curDriverName = null; _driverSeatStartEl = null;
+  _stintStartLap = null; _stintStartEl = null; _lastLoggedLap = state.laps_done||0;
+  _tempLog = []; try{ localStorage.removeItem(LIVE_KEY); }catch(e){}
+  if(typeof render==='function') render();
+}
+function confirmResetSession(){
+  if(confirm('Clear ALL session history (stints, incidents, lap log, seat time)? The planned strategy and config are kept.')) resetSessionData();
 }
 // Feed health tiers (seconds since last update). At ~112s/lap the bridge pushes
 // many times a lap, so a quiet feed means trouble, not a slow car.
@@ -1765,6 +1825,13 @@ const dname = n => (n && _ALIASES[n]) || n;   // clean game-reported driver name
 PitDB.onState(s => {
   LIVE_FIELDS.forEach(k => { if(s[k] !== undefined) state[k] = s[k]; });
   if(state.current_driver) state.current_driver = dname(state.current_driver);
+  // NEW-SESSION detect: the race clock only climbs within a session, so a drop
+  // means a fresh session was loaded in-game. Wipe last session's history so it
+  // can't leak into "this session" totals, seat time, or the stop counter.
+  if(_lastSeenEl!=null && state.elapsed_s!=null && state.elapsed_s < _lastSeenEl - 30){
+    resetSessionData();
+  }
+  _lastSeenEl = state.elapsed_s;
   // seat-time reg: reset the continuous clock only on a REAL driver swap (name
   // change), so it spans back-to-back fuel-only stints by the same driver
   if(state.current_driver && state.current_driver!=='—' && state.current_driver !== _curDriverName){
@@ -1824,9 +1891,13 @@ PitDB.onState(s => {
       _lastRegenWx = wxNowS;
     }
   }
+  // persist live trackers (throttled) so a mid-race reload keeps seat-time +
+  // stint continuity
+  if(Date.now() - _lastLiveSave > 5000){ saveLive(); _lastLiveSave = Date.now(); }
   render();
 });
 
+loadLive();   // restore seat-time + stint baselines from a prior page load
 render();
 updateConn();
 renderEventLog();
