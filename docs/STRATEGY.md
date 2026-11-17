@@ -102,6 +102,10 @@ Set the real values in the dashboard **Setup** panel; the live plan updates. The
   "time lost" seconds per driver.
 - `ref_track_temp_c: 30`, `psi_per_degC: 0.1` — baseline the cold-pressure hint
   adjusts from as track temp drifts.
+- `tyre_temp_window: {low:75, high:105}` — °C surface band the wheel-grid temp
+  colours against (blue below / green in / red above).
+- `tyre_pit_worn: 0.85` — worn fraction the dynamic "laps of life left" estimate
+  projects the measured wear rate to (85% worn = box).
 
 ## Live engineer-call layer (reads only — no plan change)
 On top of the plan, the board surfaces the calls a race engineer makes off the

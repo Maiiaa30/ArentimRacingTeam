@@ -56,10 +56,11 @@ confirms the game's **values** map right. Watch for:
 - [ ] **Pit-in** counts down toward the **VE** stop (~24), not the fuel number
       (~40). When VE binds the tile says *VE-limited*.
 - [ ] **Tyre-life %** on the grid **falls** as the stint goes (100 fresh → down).
-- [ ] **Track temp / air temp** populate (Tyres panel). If they stay `—` the
-      bridge isn't sending `track_temp`/`air_temp` yet — the trend + psi hint need
-      them. **Off-tracks** need the bridge's `track_limits` field, so **restart the
-      bridge** after any update to pick up newly added fields; contacts work without.
+- [ ] **Track temp / air temp**, **tyre temps + pressures** (wheel grid) and
+      **track wetness %** (weather chip) populate. If any stay `—` the bridge isn't
+      sending that field yet — **restart the bridge** after any update to pick up
+      newly added fields (`track_limits`, `wetness`, `raining`, per-wheel
+      `temp`/`press`). Contacts + life% work without a restart.
 - [ ] **Pit** when you box: the board auto-logs entry/exit, runs the pit timer,
       writes the stint to history, and resets the stint.
 
@@ -80,15 +81,26 @@ value/units check, not a debug-from-scratch.
   if it's well off, the pit window still self-corrects (it uses the measured rate).
 - **Strategy Brain** (Status panel): the recommendation engine. See below.
 - **Next-stop card:** what the upcoming stop is — fuel to add, tyres new/keep,
-  driver swap or stays in, the live window band (`L18–22 · ideal L20`), and the
-  **engineer call** (SAVE/PUSH/ON-TARGET + undercut) — see *Live engineer calls*.
+  driver swap or stays in, the live window band (`L18–22 · ideal L20`), the
+  **refuel calculator** (`⛽ add ~70 L · 24 laps · VE→100%`, with an "est, need N
+  laps" flag until consumption is measured), and the **engineer call**
+  (SAVE/PUSH/ON-TARGET + undercut) — see *Live engineer calls*.
 - **Race strategy table (left):** the full stop-by-stop plan for the rest of the
   race. It **re-anchors only after a real pit stop or a weather change**, not
   every lap — so it no longer churns. The live pit window + VE track reality
   lap-by-lap in the Status panel; the table is the big picture.
 - **Tyres:** used / budget (20). Red = over budget, must double-stint more. Below
-  it: worst **tyre-life %** (100 = fresh), laps-on-set, wear-out estimate, and
-  **track temp** trend + a cold-pressure hint.
+  it: worst **tyre-life %** (100 = fresh), laps-on-set, a **dynamic wear-out
+  estimate** (laps of life left from the *measured* wear rate, projected to the
+  pit threshold), **track temp** trend + cold-pressure hint, and a per-wheel grid
+  showing **life % · working temp · pressure (psi)**. Temp is coloured to the tyre
+  window — blue = cold (no grip yet), green = in window, red = overheating.
+- **Class-relative strip** (under the race strip, multiclass only): our **class
+  position**, the **interval to the class car ahead/behind** (🅿 = that car is
+  pitting), and the **class best lap**. This is the GT3 fight — the LMP/Hypercar
+  traffic doesn't matter to our result. Click it for the full timing tower.
+- **Weather chip:** DRY/WET plus live **track wetness %** and a drying/wetting
+  arrow when it's damp.
 - **Status panel rows:** Stint pace (deg), Seat time (reg), Laps left, Stops left,
   Avg lap, **Pace target**, **To flag**, Make finish.
 - **Events log:** every pit, weather call, incident, pace change — timestamped.
