@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Arentim Racing Team — Pit Wall</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b0f14'/%3E%3Ctext x='16' y='22' font-size='18' text-anchor='middle' fill='%233ea6ff' font-family='Arial' font-weight='bold'%3EA%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/style.css?v=2026-11-17l">
+<link rel="stylesheet" href="css/style.css?v=2026-11-17m">
 </head>
 <body>
 <header>
@@ -114,6 +114,7 @@
         <div class="kv"><span class="k">Seat time</span><span class="v" id="seatTime">—</span></div>
         <div class="kv"><span class="k">Avg lap</span><span class="v" id="avg">—</span></div>
         <div class="kv"><span class="k">Pace target</span><span class="v" id="paceTarget">—</span></div>
+        <div class="kv clickable" onclick="openDamage()" title="Click for damage detail"><span class="k">Damage ▸</span><span class="v" id="damageLive">—</span></div>
       </div>
       <div class="panel">
         <h2>Tires</h2>
@@ -694,6 +695,7 @@ function tabActive(name){ const v=document.getElementById('v-'+name); return !!(
 function showTab(name){
   document.querySelectorAll('.view').forEach(v=> v.classList.toggle('active', v.id==='v-'+name));
   document.querySelectorAll('#tabnav .tab').forEach(t=> t.classList.toggle('active', t.dataset.tab===name));
+  const _st=document.getElementById('sparkTip'); if(_st) _st.style.display='none';
   if(name==='trends') renderTrends();
   else if(name==='map') renderMap();
   else if(name==='field') renderStandings();
@@ -1060,6 +1062,7 @@ function render(){
     de.textContent = dsum.mandatory ? 'PIT!' : (dsum.worst>0 ? dsum.worst+'%' : 'OK');
     de.className='v '+(dsum.mandatory||dsum.severe ? 'bad' : dsum.worst===0 ? 'ok' : 'warn');
   }
+  const dl=$('damageLive'); if(dl){ dl.textContent=de.textContent; dl.className=de.className; }
   const pe=$('pen'); pe.textContent = state.penalties>0 ? state.penalties : 'none';
   pe.className='v '+(state.penalties>0?'bad':'ok');
   // tires extra + wear-out projection (linear from worst wheel)
@@ -1746,7 +1749,8 @@ function computeTrends(){
 }
 // tiny inline sparkline (SVG). vals may contain nulls (gaps are skipped). marks =
 // indexes to dot (stint starts). invert=false → lower is better shown low.
-function spark(vals, color, marks, minRange){
+let _sparks = {}, _sparkSeq = 0;   // hover registry: id -> point map + formatter
+function spark(vals, color, marks, minRange, fmt, xlabels){
   const W=640, H=56, pad=4;
   const pts = vals.map((v,i)=>({v,i})).filter(p=>p.v!=null);
   if(pts.length<2) return '<div class="spark-empty">not enough laps yet</div>';
@@ -1760,17 +1764,51 @@ function spark(vals, color, marks, minRange){
   const y=v=> pad + (1-(v-min)/span)*(H-2*pad);
   const d = pts.map((p,k)=> (k?'L':'M')+x(p.i).toFixed(1)+' '+y(p.v).toFixed(1)).join(' ');
   const dots = (marks||[]).filter(i=>vals[i]!=null).map(i=>`<circle cx="${x(i).toFixed(1)}" cy="${y(vals[i]).toFixed(1)}" r="2.5" class="spark-mark"/>`).join('');
-  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">`+
-    `<path d="${d}" fill="none" stroke="${color}" stroke-width="1.6"/>${dots}</svg>`;
+  const id='spk'+(_sparkSeq++);
+  _sparks[id] = { W, color, fmt: fmt||(v=>''+v), xlabels: xlabels||null,
+    pts: pts.map(p=>({ px:x(p.i), py:y(p.v), v:p.v, i:p.i })) };
+  return `<svg class="spark" id="${id}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">`+
+    `<path d="${d}" fill="none" stroke="${color}" stroke-width="1.6"/>${dots}`+
+    `<line class="spark-cursor" x1="0" y1="0" x2="0" y2="${H}" style="display:none"/></svg>`;
+}
+// shared tooltip + per-svg hover cursor (nearest point by x)
+function ensureSparkTip(){
+  let t=document.getElementById('sparkTip');
+  if(!t){ t=document.createElement('div'); t.id='sparkTip'; t.className='spark-tip'; document.body.appendChild(t); }
+  return t;
+}
+function wireSparks(container){
+  if(!container) return;
+  const tip = ensureSparkTip();
+  container.querySelectorAll('svg.spark').forEach(svg=>{
+    const data=_sparks[svg.id]; if(!data || svg._wired) return;
+    svg._wired=true;
+    const cursor=svg.querySelector('.spark-cursor');
+    svg.addEventListener('mousemove', e=>{
+      const r=svg.getBoundingClientRect(); if(!r.width) return;
+      const vx=((e.clientX-r.left)/r.width)*data.W;         // mouse x in viewBox units
+      let best=data.pts[0], bd=1e9;
+      for(const p of data.pts){ const dd=Math.abs(p.px-vx); if(dd<bd){ bd=dd; best=p; } }
+      if(cursor){ cursor.setAttribute('x1',best.px); cursor.setAttribute('x2',best.px); cursor.style.display=''; }
+      const label = (data.xlabels && data.xlabels[best.i]!=null) ? data.xlabels[best.i] : ('L'+(best.i+1));
+      tip.innerHTML = `<b>${label}</b>${data.fmt(best.v)}`;
+      tip.style.left = e.clientX+'px';
+      tip.style.top  = (r.top-6)+'px';
+      tip.style.display='block';
+    });
+    svg.addEventListener('mouseleave', ()=>{ if(cursor) cursor.style.display='none'; tip.style.display='none'; });
+  });
 }
 function renderTrends(){
   const el = $('trendBody'); if(!el) return;
   const t = computeTrends();
   if(!t){ el.innerHTML = '<p class="note">No laps yet — trends build as the car completes laps.</p>'; return; }
+  _sparks = {};   // rebuild hover registry for this render
   const o = t.overall;
   const fmtS = v => v!=null ? v.toFixed(2)+'s' : '—';
   const fmtF = v => v!=null ? v.toFixed(2)+' L' : '—';
   const fmtV = v => v!=null ? (v*100).toFixed(1)+'%' : '—';
+  const xlab = t.rows.map(r=>'L'+r.lap);   // x-axis labels = lap numbers
   const marks = []; let seen=new Set();
   t.stints.forEach(s=>{ const idx=t.rows.findIndex(r=>r.lap===s.startLap); if(idx>=0) marks.push(idx); });
   const ov =
@@ -1782,9 +1820,9 @@ function renderTrends(){
       `<div class="tov"><span>AVG VE/LAP</span><b>${fmtV(o.avgVe)}</b></div>`+
     `</div>`;
   const charts =
-    `<div class="trend-chart"><div class="tc-h">Lap time <span>${fmtS(o.avgLt)} avg · lower = faster</span></div>${spark(t.rows.map(r=>r.lap_s), '#5fd3ff', marks, 3)}</div>`+
-    `<div class="trend-chart"><div class="tc-h">Fuel / lap <span>${fmtF(o.avgFpl)} avg</span></div>${spark(t.rows.map(r=>r.fpl), '#ffb454', marks, 1.0)}</div>`+
-    `<div class="trend-chart"><div class="tc-h">VE / lap <span>${fmtV(o.avgVe)} avg</span></div>${spark(t.rows.map(r=>r.vepl!=null?r.vepl*100:null), '#8b7dff', marks, 2.0)}</div>`;
+    `<div class="trend-chart"><div class="tc-h">Lap time <span>${fmtS(o.avgLt)} avg · lower = faster</span></div>${spark(t.rows.map(r=>r.lap_s), '#5fd3ff', marks, 3, v=>fmtLap(v), xlab)}</div>`+
+    `<div class="trend-chart"><div class="tc-h">Fuel / lap <span>${fmtF(o.avgFpl)} avg</span></div>${spark(t.rows.map(r=>r.fpl), '#ffb454', marks, 1.0, v=>v.toFixed(2)+' L', xlab)}</div>`+
+    `<div class="trend-chart"><div class="tc-h">VE / lap <span>${fmtV(o.avgVe)} avg</span></div>${spark(t.rows.map(r=>r.vepl!=null?r.vepl*100:null), '#8b7dff', marks, 2.0, v=>v.toFixed(1)+'%', xlab)}</div>`;
   const srows = t.stints.map(s=>{
     const degCls = s.deg==null?'':(s.deg>0.08?'bad':s.deg<-0.02?'ok':'');
     const degTxt = s.deg==null?'—':(s.deg>0?'+':'')+s.deg.toFixed(2)+'s/lap';
@@ -1798,6 +1836,7 @@ function renderTrends(){
     `<table class="laptbl"><thead><tr><th>#</th><th>Driver</th><th>From</th><th>Laps</th>`+
     `<th>Avg lap</th><th>Best</th><th>Fuel/lap</th><th>VE/lap</th><th>Deg</th></tr></thead><tbody>${srows}</tbody></table>`;
   el.innerHTML = ov + charts + tbl;
+  wireSparks(el);
 }
 // per-driver pace comparison (actual laps). Clean/representative laps only:
 // drop in/out-laps and anything >107% of the driver's own best (pits, offs).
