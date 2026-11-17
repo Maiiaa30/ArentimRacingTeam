@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Arentim Racing Team — Pit Wall</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b0f14'/%3E%3Ctext x='16' y='22' font-size='18' text-anchor='middle' fill='%233ea6ff' font-family='Arial' font-weight='bold'%3EA%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/style.css?v=2026-11-17h">
+<link rel="stylesheet" href="css/style.css?v=2026-11-17j">
 </head>
 <body>
 <header>
@@ -126,6 +126,7 @@
           <button onclick="openFuel()">Fuel save</button>
           <button onclick="openLaps()">Lap log</button>
           <button onclick="openTrends()">Trends</button>
+          <button onclick="openMap()">Track map</button>
           <button onclick="openDrivers()">Driver load</button>
           <button onclick="openTimeline()">Timeline</button>
           <button onclick="openStandings()">Standings</button>
@@ -252,6 +253,17 @@
     <p class="note" style="margin-top:8px">Each completed lap recorded from the live stream — driver, time, fuel, tyre life. Export for post-race review.</p>
     <div id="lapPace"></div>
     <div id="lapBody"></div>
+  </div>
+</div>
+
+<!-- track map modal: self-drawing circuit from our position trail + live car dots -->
+<div class="modal-bg" id="mapModal">
+  <div class="modal wide">
+    <button class="x" onclick="closeMap()">✕</button>
+    <h2>Track map <span class="chip" id="mapCars">—</span></h2>
+    <p class="note" style="margin-top:4px">Live positions from the game. The circuit draws itself from our car's path over a lap. Dots are cars, coloured by class — ours ringed in white. Needs the bridge running (sends world coordinates).</p>
+    <div id="mapBody"></div>
+    <div class="btns" style="margin-top:8px"><button onclick="trackTrail=[];_lastTrailPt=null;renderMap()">Clear track</button></div>
   </div>
 </div>
 
@@ -1562,6 +1574,66 @@ function renderLapLog(){
   $('lapBody').innerHTML = `<table class="laptbl"><thead><tr><th>Lap</th><th>Time</th><th>Driver</th>`+
     `<th>Fuel</th><th>Set lap</th><th>Pos</th><th>Wx</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
+// ---- track map: self-drawing circuit from our position trail + live car dots ----
+let trackTrail = [];              // our car's [x,z] path → traces the circuit
+let _lastTrailPt = null;
+const TRAIL_MAX = 900;            // ~one lap of points at a few-metre spacing
+function captureTrackPos(){
+  const us = (state.rivals||[]).find(r=> r && r.is_us && Array.isArray(r.pos_xz));
+  if(!us) return;
+  const x=us.pos_xz[0], z=us.pos_xz[1];
+  if(x==null || z==null) return;
+  if(_lastTrailPt){
+    const dx=x-_lastTrailPt[0], dz=z-_lastTrailPt[1];
+    if(dx*dx+dz*dz < 9) return;    // moved <3 m: skip (density/noise control)
+  }
+  trackTrail.push([x,z]); _lastTrailPt=[x,z];
+  if(trackTrail.length>TRAIL_MAX) trackTrail.shift();
+  if(document.getElementById('mapModal').classList.contains('open')) renderMap();
+}
+function openMap(){ renderMap(); $('mapModal').classList.add('open'); }
+function closeMap(){ $('mapModal').classList.remove('open'); }
+function renderMap(){
+  const el = $('mapBody'); if(!el) return;
+  const cars = (state.rivals||[]).filter(r=> r && Array.isArray(r.pos_xz) && r.pos_xz[0]!=null);
+  if($('mapCars')) $('mapCars').textContent = cars.length ? cars.length+' cars' : 'no feed';
+  const pts = trackTrail.concat(cars.map(c=>c.pos_xz));
+  if(pts.length<2){
+    el.innerHTML = '<p class="note">No position data yet — start the bridge (or run it with --demo). The circuit traces itself as the car completes a lap.</p>';
+    return;
+  }
+  let minX=Infinity,maxX=-Infinity,minZ=Infinity,maxZ=-Infinity;
+  pts.forEach(p=>{ const x=p[0],z=p[1]; if(x<minX)minX=x; if(x>maxX)maxX=x; if(z<minZ)minZ=z; if(z>maxZ)maxZ=z; });
+  const W=(maxX-minX)||1, H=(maxZ-minZ)||1, pad=Math.max(W,H)*0.08;
+  minX-=pad;maxX+=pad;minZ-=pad;maxZ+=pad;
+  const RW=maxX-minX, RH=maxZ-minZ;
+  const VW=680, VH=Math.max(240, Math.min(520, Math.round(VW*RH/RW)));
+  const sx=x=> ((x-minX)/RW*VW);
+  const sy=z=> (VH-(z-minZ)/RH*VH);        // invert Z so north is up
+  const trail = trackTrail.length>1
+    ? `<path d="${trackTrail.map((p,i)=>(i?'L':'M')+sx(p[0]).toFixed(1)+' '+sy(p[1]).toFixed(1)).join(' ')}" class="trk-path"/>`
+    : '';
+  const dots = cars.map(c=>{
+    const x=c.pos_xz[0], z=c.pos_xz[1], cx=sx(x).toFixed(1), cy=sy(z).toFixed(1);
+    const col = (classMeta(c.cls||'')||{}).color || '#8892a0';
+    // our car keeps its class fill but gets a bright white halo so it's never
+    // confused with a same-coloured rival (e.g. a red Hypercar).
+    const halo = c.is_us ? `<circle cx="${cx}" cy="${cy}" r="9" fill="none" stroke="#fff" stroke-width="2"/>` : '';
+    return halo + `<circle cx="${cx}" cy="${cy}" r="${c.is_us?6:5}" fill="${col}" stroke="#0b0e13" stroke-width="1.6"/>`+
+      `<text x="${cx}" y="${(sy(z)-11).toFixed(1)}" text-anchor="middle" class="trk-num${c.is_us?' us':''}">${_esc(c.num||'')}</text>`;
+  }).join('');
+  // class legend from the cars actually present
+  const classes = [...new Set(cars.map(c=>c.cls).filter(Boolean))];
+  const legend = classes.map(cl=>{
+    const col=(classMeta(cl)||{}).color||'#8892a0';
+    return `<span class="trk-lg"><i style="background:${col}"></i>${_esc(cl)}</span>`;
+  }).join('') + `<span class="trk-lg"><i class="us-dot"></i>us (white ring)</span>`;
+  el.innerHTML =
+    `<svg class="trkmap" viewBox="0 0 ${VW} ${VH}" preserveAspectRatio="xMidYMid meet">`+
+      `<rect x="0" y="0" width="${VW}" height="${VH}" class="trk-bg"/>${trail}${dots}</svg>`+
+    `<div class="trk-legend">${legend}</div>`;
+}
+
 // ---- trends: fuel/lap + lap-time + VE across the race, overall and per stint ----
 function openTrends(){ renderTrends(); $('trendModal').classList.add('open'); }
 function closeTrends(){ $('trendModal').classList.remove('open'); }
@@ -2074,6 +2146,7 @@ function resetSessionData(){
   _curDriverName = null; _driverSeatStartEl = null;
   _stintStartLap = null; _stintStartEl = null; _lastLoggedLap = state.laps_done||0;
   _tempLog = []; try{ localStorage.removeItem(LIVE_KEY); }catch(e){}
+  trackTrail = []; _lastTrailPt = null;
   if(typeof render==='function') render();
 }
 function confirmResetSession(){
@@ -2138,7 +2211,7 @@ PitDB.onState(s => {
     _driverSeatStartEl = state.elapsed_s!=null ? state.elapsed_s : 0;
   }
   if(Array.isArray(s.wheels)) state.wheels = s.wheels;
-  if(Array.isArray(s.rivals)){ s.rivals.forEach(r=>{ if(r && r.driver) r.driver = dname(r.driver); }); state.rivals = s.rivals; }
+  if(Array.isArray(s.rivals)){ s.rivals.forEach(r=>{ if(r && r.driver) r.driver = dname(r.driver); }); state.rivals = s.rivals; captureTrackPos(); }
   if(s.sectors && typeof s.sectors === 'object') state.sectors = s.sectors;
   // pit auto-detect: in_pits false->true = entry, true->false = exit
   if(s.in_pits !== undefined){

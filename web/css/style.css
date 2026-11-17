@@ -747,3 +747,15 @@ tr.splash td{opacity:.72}
 .spark-empty{font-size:12px;color:var(--dim);padding:18px 10px;background:var(--panel2);
   border:1px solid var(--line);border-radius:8px}
 @media(max-width:700px){ .trend-ov{grid-template-columns:repeat(2,1fr)} }
+
+/* ---- track map modal ---- */
+.trkmap{width:100%;height:auto;display:block;border:1px solid var(--line);border-radius:10px;margin-top:10px}
+.trk-bg{fill:#0a0d12}
+.trk-path{fill:none;stroke:#3a4556;stroke-width:6;stroke-linejoin:round;stroke-linecap:round;opacity:.9}
+.trk-num{fill:#cdd5df;font-family:var(--mono);font-size:10px;font-weight:700}
+.trk-num.us{fill:#ff6a60}
+.trk-legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:8px}
+.trk-lg{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--mut);
+  letter-spacing:.5px;text-transform:uppercase;font-family:var(--mono)}
+.trk-lg i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.trk-lg i.us-dot{background:#8892a0;box-shadow:0 0 0 2px #fff}

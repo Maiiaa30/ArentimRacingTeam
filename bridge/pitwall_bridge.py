@@ -59,6 +59,21 @@ def open_shared_memory():
         return None
 
 
+def _xz(vect):
+    """World ground-plane position [x, z] from an LMUVect3 (y is vertical). Used to
+    draw the live track map; None when the game doesn't expose it."""
+    if vect is None:
+        return None
+    try:
+        x = getattr(vect, "x", None)
+        z = getattr(vect, "z", None)
+        if x is None or z is None:
+            return None
+        return [round(float(x), 2), round(float(z), 2)]
+    except Exception:
+        return None
+
+
 def _norm_class(c):
     """LMU class text -> a key the dashboard's CLASS_META knows (Hypercar/LMP2/LMGT3)."""
     if not c:
@@ -274,6 +289,7 @@ def read_state(info):
             fuel_pct = round(ffrac / 255 * 100) if ffrac is not None else None
             rivals.append({
                 "pos": g(v, "mPlace"),
+                "pos_xz": _xz(g(v, "mPos")),          # world ground-plane position (track map)
                 "name": name or driver,
                 "num": num,
                 "manuf": manuf,
@@ -419,6 +435,9 @@ def demo_state(tick):
         "rivals": [
             {"pos": p, "num": num, "manuf": mf, "model": mdl, "team": tm, "driver": dr,
              "name": "#" + num + " " + mf, "cls": cl,
+             # fake world position on a wobbly closed loop so the track map self-draws
+             "pos_xz": [round(820 * math.cos(tick * 0.10 + p * 0.55) + 120 * math.cos(3 * (tick * 0.10 + p * 0.55)), 1),
+                        round(520 * math.sin(tick * 0.10 + p * 0.55) + 80 * math.sin(2 * (tick * 0.10 + p * 0.55)), 1)],
              "gap_s": 0 if num == "38" else round(p * 3.5, 1),
              "last_lap_s": round((95.0 - (8 if cl == "Hypercar" else 0)) + p * 0.2, 3),
              "best_lap_s": round((95.0 - (8 if cl == "Hypercar" else 0)) - 0.4, 3),
