@@ -15,13 +15,24 @@ body{background:
     radial-gradient(1200px 700px at 50% -8%, #141924 0%, var(--bg) 62%);
   color:var(--txt);font-family:var(--sans);min-height:100dvh;overflow-y:auto;
   display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
-/* Desktop: bound the page to the viewport so flex children (events log, strategy
-   table) fill the spare space and scroll INTERNALLY instead of growing the page.
-   Mobile (<=900) keeps natural page scroll — see the stacked-layout media query. */
-@media(min-width:901px){
+@media(min-width:901px){ header{flex:0 0 auto} }
+
+/* TALL desktop only (enough vertical room): bound the page to the viewport so the
+   whole board sits on one screen — the mid row fills the space under the tiles,
+   the strategy table scrolls INSIDE its column, status scrolls inside its own,
+   and the events panel keeps a fixed slice at the bottom. A SHORT landscape
+   monitor (e.g. 1366x768) can't fit all this, so below 880px tall we DON'T clamp:
+   the page keeps natural scroll and panels take their natural height — content
+   flows top-to-bottom with no overlap, the user just scrolls. */
+@media(min-width:1181px) and (min-height:880px){
   html,body{height:100dvh}
   body{overflow:hidden}
-  header{flex:0 0 auto}
+  .grid.mid{flex:1 1 auto;min-height:0;align-items:stretch;grid-template-rows:minmax(0,1fr)}
+  .strat{min-height:0;overflow:hidden}
+  .strat .tbl-scroll{flex:1 1 auto;max-height:none;min-height:0}
+  .statuscol{min-height:0;overflow-y:auto}
+  .evpanel{flex:0 0 auto}
+  .evpanel .ev-log{max-height:160px}
 }
 
 /* ---- top bar ---- */
