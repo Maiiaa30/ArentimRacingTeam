@@ -756,16 +756,20 @@ function renderStandings(){
                   : (r.best_lap_s!=null && r.best_lap_s===fl.byCls[nm]) ? 'best fl-c' : '';
       const battle = (intvNum!=null && Math.abs(intvNum)<1.0) ? ' battle' : '';
       const pen=(r.penalties!=null && r.penalties>0);
-      // us-only extras (sim exposes track-limits & damage for the ego car only)
-      let extra='';
-      if(isUs){
-        const tl = state.track_limits!=null ? state.track_limits : null;
-        const dmg = dsum ? (dsum.mandatory?'PIT!':(dsum.worst>0?dsum.worst+'%':'OK')) : '—';
-        const dmgCls = dsum ? (dsum.mandatory||dsum.severe?'bad':dsum.worst===0?'ok':'warn') : '';
-        extra =
-          `<div class="sst"><span>LIMITS</span><b class="${tl>0?'warn':''}">${tl!=null?tl:'—'}</b></div>`+
-          `<div class="sst"><span>DAMAGE</span><b class="${dmgCls}">${dmg}</b></div>`;
+      // track limits + damage are exposed per-vehicle, so show them for every car.
+      // our row prefers the richer damage summary (shows PIT! when a repair is forced).
+      const tl = r.track_limits!=null ? r.track_limits : null;
+      let dmgTxt='—', dmgCls='';
+      if(isUs && dsum){
+        dmgTxt = dsum.mandatory?'PIT!':(dsum.worst>0?dsum.worst+'%':'OK');
+        dmgCls = dsum.mandatory||dsum.severe?'bad':dsum.worst===0?'ok':'warn';
+      } else if(r.damage_pct!=null){
+        dmgTxt = r.damage_pct>0?r.damage_pct+'%':'OK';
+        dmgCls = r.damage_pct>=15?'bad':r.damage_pct>0?'warn':'ok';
       }
+      const extra =
+        `<div class="sst"><span>LIMITS</span><b class="${tl>0?'warn':''}">${tl!=null?tl:'—'}</b></div>`+
+        `<div class="sst"><span>DAMAGE</span><b class="${dmgCls}">${dmgTxt}</b></div>`;
       list+=`<div class="srow${usCl}${battle}">`+
         `<div class="srk"><b>${ci+1}</b><i>P${r.pos??'—'}</i></div>`+
         `${badgeHtml(mf)}`+
@@ -786,7 +790,7 @@ function renderStandings(){
     sb.innerHTML=
       `<div class="field-tabs">${btns}</div>`+
       `<div class="stand-col" data-cls="${m.name}" style="--cc:${m.color}"><div class="stand-list cscroll">${list}</div></div>`+
-      `<p class="note">LIMITS &amp; DAMAGE shown for our car only — the sim reports those for your own car, not rivals.</p>`;
+      `<p class="note">ENERGY = fuel / battery left · STOPS = pit stops · PEN = outstanding penalties · LIMITS = track-limit steps · DAMAGE = bodywork.</p>`;
     const nl=sb.querySelector('.stand-list'); if(nl) nl.scrollTop=_prevScroll;
   }
   // our sectors

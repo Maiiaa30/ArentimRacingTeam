@@ -273,6 +273,30 @@ def read_state(info):
         sectors = {"s1": round(ls1, 3), "s2": round(ls2 - ls1, 3), "s3": round(last_lap - ls2, 3)}
 
     # rival field: iterate every scored vehicle
+    # per-vehicle telemetry (damage, track limits) is exposed for ALL cars, not just
+    # the player — the telemetry array is keyed by mID, same as scoring.
+    telem_by_id = {}
+    try:
+        T = D.telemetry
+        act = int(g(T, "activeVehicles", 0) or 0)
+        for ti in range(max(0, min(act, len(T.telemInfo)))):
+            te = T.telemInfo[ti]
+            tid = g(te, "mID")
+            if tid is not None:
+                telem_by_id[tid] = te
+    except Exception:
+        telem_by_id = {}
+
+    def _dmg_pct(te):
+        if te is None:
+            return None
+        ds = g(te, "mDentSeverity", None)
+        try:
+            vals = [int(x) for x in ds[:8]]
+        except Exception:
+            return None
+        return round(sum(vals) / (len(vals) * 2) * 100) if vals else None
+
     rivals = []
     try:
         my_id = g(scor, "mID")
@@ -288,6 +312,7 @@ def read_state(info):
             vbl = g(v, "mBestLapTime")
             ffrac = g(v, "mFuelFraction")             # 0..255 = 0..100% fuel OR battery
             fuel_pct = round(ffrac / 255 * 100) if ffrac is not None else None
+            vte = telem_by_id.get(g(v, "mID"))        # this car's telemetry (damage/limits)
             rivals.append({
                 "pos": g(v, "mPlace"),
                 "pos_xz": _xz(g(v, "mPos")),          # world ground-plane position (track map)
@@ -308,6 +333,8 @@ def read_state(info):
                 "pit_stops": g(v, "mNumPitstops"),       # pit stops made so far
                 "penalties": g(v, "mNumPenalties"),      # outstanding penalties
                 "finish_status": g(v, "mFinishStatus"),  # 0 none,1 finished,2 dnf,3 dq
+                "damage_pct": _dmg_pct(vte),             # bodywork dent severity (all cars)
+                "track_limits": g(vte, "mTrackLimitsSteps") if vte is not None else None,
                 "is_us": (g(v, "mID") == my_id) if my_id is not None else False,
             })
     except Exception:
@@ -456,6 +483,8 @@ def demo_state(tick):
              "pit_stops": 1 + (lap // 24),
              "penalties": (1 if p == 4 else 0),
              "finish_status": 0,
+             "damage_pct": (19 if p == 3 else 6 if p == 7 else 0),
+             "track_limits": (2 if p == 5 else 0),
              "is_us": num == "38"}
             for p, (num, mf, mdl, tm, dr, cl) in enumerate([
                 ("7", "Toyota", "GR010 Hybrid", "Toyota Gazoo Racing", "Kobayashi", "Hypercar"),
