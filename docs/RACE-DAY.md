@@ -22,6 +22,18 @@ updates here, the only unknown left on race day is the shared-memory read.
 The bridge console prints `supabase push FAILING` if a push fails — if you see
 that, fix network/keys before trusting the live run.
 
+**Test the replay guard** (so a rewind never corrupts the board):
+
+```
+python3 pitwall_bridge.py --demo --demo-replay --supabase
+```
+
+This simulates you opening a replay every ~30s. The console prints
+`HOLDING push — clock … behind live (replay/rewind)` during each window and
+`live resumed` after. On the board the numbers **freeze at the last live value
+and never jump backwards**, then catch up when it resumes. That's the real-race
+behaviour when you rewind while spectating (see *Spectating & replays* below).
+
 ## Before the start
 
 1. **Bridge up on the game PC.** `python pitwall_bridge.py --print --supabase`
@@ -213,6 +225,22 @@ when the flag is FCY/SC/yellow and your stop is within ~6 laps.
    discounted stop even a few laps early.
 2. The game auto-logs the stop as usual; the plan re-anchors on pit exit.
 3. If you're nowhere near a stop, ignore it — don't pit early just to chase it.
+
+### Spectating & replays
+You can spectate live and watch any car's detail (tyres, temps, etc.) — the
+board keeps updating. **If you open a replay or rewind** to re-watch an earlier
+moment, the game starts reporting that past state. The bridge detects this (the
+session clock drops below the live high-water mark) and **holds** — it stops
+pushing until you're back live, so the board never jumps backwards. While held:
+- The bridge console prints `HOLDING push — … (replay/rewind)`.
+- The board shows the **last live numbers**, frozen. If you stay in the replay
+  more than ~15s it will flag **NO FEED / stale** (expected — it can't tell a
+  replay from a dead bridge; the data is simply held, not lost).
+- Exit the replay / return to live and it resumes within a few seconds
+  (`live resumed` in the console).
+
+So: re-watch whatever you like — it will not pollute the live board. Just don't
+leave the game sitting in a replay if the team needs live numbers.
 
 ### Rain
 1. When it starts raining, hit **Rain NOW**. The remaining plan rebuilds onto
