@@ -424,6 +424,11 @@ def read_state(info):
         "_dents": dent_list,
         "_game_phase": phase,                        # diagnostic: raw mGamePhase
         "_sector_flags": list(sflags) if sflags else None,
+        # live/replay guard: mInRealtime is False at the monitor / during a replay;
+        # elapsed_s (mCurrentET) moves backwards when you rewind. Used by the push
+        # gate so spectating a replay never overwrites the live board. (underscore
+        # prefix -> the dashboard ignores them; they're only for the bridge.)
+        "_in_realtime": bool(g(si, "mInRealtime")) if g(si, "mInRealtime") is not None else None,
         "updated_at": _now_iso(),
     }
 
@@ -556,12 +561,48 @@ def load_dotenv():
         print(f"[bridge] could not read .env: {e}", file=sys.stderr)
 
 
+def live_push_ok(state, gate):
+    """Should this frame be pushed to the live board?
+
+    Guards the board against a spectator replay / rewind overwriting live data.
+    When the person at the game PC goes back to re-watch an earlier moment, the
+    shared memory starts reporting that PAST state; pushing it would make every
+    viewer's board jump backwards.
+
+    The unambiguous signal is the session clock (``elapsed_s`` = mCurrentET)
+    being BEHIND the furthest-live point we've seen: a live race only ever moves
+    the clock forward, while any replay frame (seek back, seek within the past,
+    or paused in the past) sits below that high-water mark. We gate on that, not
+    on mInRealtime — live *monitor* spectating (broadcast view, no cockpit) can
+    report mInRealtime False while still being perfectly good live data, so
+    ``_in_realtime`` is kept only as a diagnostic.
+
+    A clock reset to near-zero is a NEW session, not a rewind, so it's allowed
+    and resets the high-water mark. ``gate`` is a dict kept across calls
+    ({'hw': float}). Returns ``(ok: bool, reason: str)``.
+    """
+    et = state.get("elapsed_s")
+    if et is None:
+        return True, "no session clock — cannot gate"
+    hw = gate.get("hw")
+    if hw is not None and et < hw - 2.0:
+        if et < 30.0:                       # clock reset to ~0 => a new session
+            gate["hw"] = et
+            return True, "new session (clock reset)"
+        return False, f"clock {hw - et:.0f}s behind live (replay/rewind)"
+    gate["hw"] = et if hw is None else max(hw, et)
+    return True, "live"
+
+
 def main():
     load_dotenv()
     ap = argparse.ArgumentParser(description="Pit Wall telemetry bridge (LMU/rF2)")
     ap.add_argument("--print", dest="do_print", action="store_true",
                     help="print mapped fields (validate the game exposes them)")
     ap.add_argument("--demo", action="store_true", help="synthetic race, no game needed")
+    ap.add_argument("--demo-replay", dest="demo_replay", action="store_true",
+                    help="with --demo: periodically simulate a spectator replay/rewind "
+                         "so you can watch the push-gate hold the board")
     ap.add_argument("--supabase", action="store_true", help="push to Supabase")
     ap.add_argument("--hz", type=float, default=POLL_HZ, help="updates per second")
     args = ap.parse_args()
@@ -583,6 +624,8 @@ def main():
     errstreak = 0
     pushok = 0          # consecutive successful Supabase pushes
     pushfail = 0        # consecutive failed Supabase pushes
+    gate = {}           # live/replay push-gate state (carries last session clock)
+    held = 0            # consecutive frames held back (replay/rewind)
     heartbeat = max(1, int(round(args.hz * 30)))   # OK heartbeat ~every 30s
     print(f"[bridge] start — print={args.do_print} demo={args.demo} supabase={args.supabase}")
     try:
@@ -599,9 +642,27 @@ def main():
                 time.sleep(period)
                 tick += 1
                 continue
+            # offline test: simulate the owner opening a replay / rewinding for a
+            # stretch of each cycle so the push-gate can be seen holding the board.
+            if args.demo and args.demo_replay and (tick % 120) >= 100:
+                state["_in_realtime"] = False
+                state["elapsed_s"] = max(0, (tick - 60) * 24)   # clock rewound ~60 frames
             if args.do_print:
                 print(json.dumps(state, indent=2, default=str))
             if args.supabase:
+                # live/replay gate: never let a spectator replay overwrite the board
+                pushable, why = live_push_ok(state, gate)
+                if not pushable:
+                    held += 1
+                    if held in (1, 5) or held % 150 == 0:
+                        print(f"[bridge] HOLDING push — {why}. Live board keeps its "
+                              f"last live data; exit the replay to resume.")
+                    tick += 1
+                    time.sleep(period)
+                    continue
+                if held:
+                    print(f"[bridge] live resumed — pushing again (lap {state.get('laps_done')})")
+                    held = 0
                 ok = push_supabase(state)       # already swallows its own errors
                 if ok:
                     pushok += 1
