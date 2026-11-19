@@ -150,7 +150,7 @@
   <section class="view" id="v-map">
     <div class="panel">
       <h2>Track map <span class="chip" id="mapCars">—</span></h2>
-      <p class="note" style="margin-top:4px">Live positions from the game. The track is identified by name and traced from our car's first lap, then saved — so next time it loads instantly. Dots are cars, coloured by class — ours ringed in white. Needs the bridge running.</p>
+      <p class="note" style="margin-top:4px">Live positions from the game. The circuit is drawn from every car's distance along the lap — the whole field maps it in a lap or two — then saved per track so it loads instantly next time. Dots are cars, coloured by class, ours ringed in white. Needs the bridge running.</p>
       <div id="mapBody"></div>
       <div class="btns" style="margin-top:8px"><button onclick="clearTrackOutline()">Clear track</button></div>
     </div>
@@ -1626,98 +1626,59 @@ function renderLapLog(){
     `<th>Fuel</th><th>Set lap</th><th>Pos</th><th>Wx</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 // ---- track map: real circuit (identified + saved per track) + live car dots ----
-let trackTrail = [];              // our car's clean current-lap [x,z] path
-let trackOutline = null;          // saved full-lap racing line for the CURRENT track
 let trackName = null;             // circuit name from the game (identifies the track)
-let _lastTrailPt = null, _lastMapLap = null;
-let _lapHadPit = false;           // true if we touched the pits this lap (pit lap != circuit)
-let trackCloud = [];              // point cloud from ALL cars -> fills the circuit fast
-let _cloudGrid = new Set();       // dedupe keys for the cloud (one point per cell)
-const TRAIL_MAX = 1400;           // a lap of points at a few-metre spacing
-const CLOUD_MAX = 1800;           // cap the cloud so render stays light
-const CLOUD_CELL = 8;             // metres: one cloud point per 8m grid cell
-const TRACK_KEY = 'arentim_pitwall_track::';   // + track name → saved racing line
-const CLOUD_KEY = 'arentim_pitwall_cloud::';   // + track name → saved point cloud
+let trackLen  = 0;                // full lap length (metres) from the game
+let trackBins = {};               // lapDistBin -> {x,z,n}: averaged centreline point
+let _ribbonDirty = false;
+const BIN_STEP = 50;              // metres of lap distance per centreline point
+const RIBBON_KEY = 'arentim_pitwall_ribbon::';   // + track name → saved ribbon
 function _trackSlug(n){ return (n||'').toString().trim().toLowerCase(); }
-function _cellKey(p){ return Math.round(p[0]/CLOUD_CELL)+','+Math.round(p[1]/CLOUD_CELL); }
-function loadOutline(name){
-  if(!name) return null;
-  try { const v = JSON.parse(localStorage.getItem(TRACK_KEY+_trackSlug(name))||'null');
-        return Array.isArray(v) && v.length>=150 ? v : null; } catch(e){ return null; }
+function loadRibbon(name){
+  if(!name) return {bins:{}, len:0};
+  try { const v = JSON.parse(localStorage.getItem(RIBBON_KEY+_trackSlug(name))||'null');
+        return (v && v.bins) ? v : {bins:{}, len:0}; } catch(e){ return {bins:{}, len:0}; }
 }
-function saveOutline(name, pts){
-  if(!name || !Array.isArray(pts) || pts.length<150) return;
-  try { localStorage.setItem(TRACK_KEY+_trackSlug(name), JSON.stringify(pts)); } catch(e){}
-}
-// a trail is a usable circuit only if it's a full closed loop: enough points and the
-// start and end land near each other (a partial/pit lap neither closes nor is long).
-function _isCompleteLap(t){
-  if(!t || t.length<150) return false;
-  let mnx=Infinity,mxx=-Infinity,mnz=Infinity,mxz=-Infinity;
-  t.forEach(p=>{ if(p[0]<mnx)mnx=p[0]; if(p[0]>mxx)mxx=p[0]; if(p[1]<mnz)mnz=p[1]; if(p[1]>mxz)mxz=p[1]; });
-  const diag = Math.hypot(mxx-mnx, mxz-mnz) || 1;
-  const d = Math.hypot(t[0][0]-t[t.length-1][0], t[0][1]-t[t.length-1][1]);
-  return d < diag*0.12;   // ends within 12% of the circuit span -> it closed
-}
-function loadCloud(name){
-  if(!name) return [];
-  try { const v = JSON.parse(localStorage.getItem(CLOUD_KEY+_trackSlug(name))||'null');
-        return Array.isArray(v) ? v : []; } catch(e){ return []; }
-}
-let _cloudSaveT = null;
-function _saveCloudThrottled(){   // localStorage write at most every 4s (cloud grows slowly)
-  if(_cloudSaveT) return;
-  _cloudSaveT = setTimeout(()=>{ _cloudSaveT=null;
-    try { if(trackName) localStorage.setItem(CLOUD_KEY+_trackSlug(trackName), JSON.stringify(trackCloud)); } catch(e){}
+let _ribbonSaveT = null;
+function _saveRibbonThrottled(){   // localStorage write at most every 4s
+  if(_ribbonSaveT) return;
+  _ribbonSaveT = setTimeout(()=>{ _ribbonSaveT=null;
+    try { if(trackName) localStorage.setItem(RIBBON_KEY+_trackSlug(trackName),
+            JSON.stringify({bins:trackBins, len:trackLen})); } catch(e){}
   }, 4000);
 }
-// called on every feed: pick up a track change, capture our position, and snapshot
-// the outline each completed lap so the real circuit is known from then on.
+// ordered centreline [x,z] from the bins, lowest lap-distance first = a clean closed loop
+function buildRibbon(){
+  const keys = Object.keys(trackBins).map(Number).sort((a,b)=>a-b);
+  const out = [];
+  keys.forEach(k=>{ const b=trackBins[k]; if(b && b.n>=1) out.push([b.x, b.z]); });
+  return out;
+}
+// On every feed: bin each car's position by its distance along the lap (mLapDist) and
+// average it. The whole field paints one clean, correctly-ordered centreline in seconds
+// — a real track shape, not a self-traced scribble. Persisted per track.
 function captureTrackPos(){
-  // track identity: when it changes, load that track's saved racing line + cloud and
-  // start a fresh trail in the new coordinate frame.
   const nm = state.track_name || null;
   if(nm !== trackName){
     trackName = nm;
-    trackOutline = loadOutline(nm);
-    trackCloud = loadCloud(nm);
-    _cloudGrid = new Set(trackCloud.map(_cellKey));
-    trackTrail = []; _lastTrailPt = null; _lastMapLap = (state.laps_done!=null?state.laps_done:null);
+    const saved = loadRibbon(nm);
+    trackBins = saved.bins || {};
+    trackLen  = saved.len  || 0;
   }
+  if(state.track_len) trackLen = state.track_len;
   const cars = (state.rivals||[]).filter(r=> r && Array.isArray(r.pos_xz) && r.pos_xz[0]!=null);
-  // 1) point cloud from EVERY car on track — the whole field traces the circuit in a
-  //    lap or two, and it's persisted so a page reload doesn't lose the map.
-  let added = false;
   cars.forEach(c=>{
-    const k = _cellKey(c.pos_xz);
-    if(!_cloudGrid.has(k)){ _cloudGrid.add(k); trackCloud.push([c.pos_xz[0], c.pos_xz[1]]); added = true; }
+    if(c.in_pits) return;                         // pit-lane positions aren't the circuit
+    const ld = c.lap_dist;
+    if(ld==null || ld<0) return;                  // need distance-along-lap to order it
+    if(trackLen && ld > trackLen*1.05) return;    // guard stray values
+    const bi = Math.round(ld/BIN_STEP);
+    const b = trackBins[bi] || (trackBins[bi]={x:0, z:0, n:0});
+    b.x += (c.pos_xz[0]-b.x)/(b.n+1);             // running mean -> converges to centreline
+    b.z += (c.pos_xz[1]-b.z)/(b.n+1);
+    b.n++;
+    _ribbonDirty = true;
   });
-  if(trackCloud.length > CLOUD_MAX){ trackCloud = trackCloud.slice(-CLOUD_MAX); _cloudGrid = new Set(trackCloud.map(_cellKey)); }
-  if(added) _saveCloudThrottled();
-  // 2) our car's clean current-lap racing line
-  if(state.in_pits) _lapHadPit = true;      // this lap visited the pits -> not the circuit
-  const us = cars.find(r=> r.is_us);
-  if(us){
-    const x=us.pos_xz[0], z=us.pos_xz[1];
-    let moved = true;
-    if(_lastTrailPt){ const dx=x-_lastTrailPt[0], dz=z-_lastTrailPt[1]; moved = (dx*dx+dz*dz) >= 9; }
-    if(moved){
-      trackTrail.push([x,z]); _lastTrailPt=[x,z];
-      if(trackTrail.length>TRAIL_MAX) trackTrail.shift();
-    }
-  }
-  // 3) on each completed lap: if it was a full, clean (non-pit), closed lap, keep it as
-  //    the circuit — preferring the most complete one. Then reset for the next lap.
-  if(state.laps_done!=null && _lastMapLap!=null && state.laps_done > _lastMapLap){
-    const t = trackTrail;
-    if(!_lapHadPit && _isCompleteLap(t) && (!trackOutline || t.length >= trackOutline.length)){
-      trackOutline = t.slice(); saveOutline(trackName, trackOutline);
-    }
-    trackTrail = []; _lastTrailPt = null; _lapHadPit = false;
-    _lastMapLap = state.laps_done;
-  } else if(_lastMapLap==null && state.laps_done!=null){
-    _lastMapLap = state.laps_done;
-  }
+  if(_ribbonDirty){ _saveRibbonThrottled(); _ribbonDirty=false; }
   if(tabActive('map')) renderMap();
 }
 function openMap(){ showTab('map'); }
@@ -1747,29 +1708,27 @@ function _smoothPath(pts, sx, sy, closed){
   return d;
 }
 function clearTrackOutline(){
-  trackTrail=[]; _lastTrailPt=null; trackOutline=null;
-  trackCloud=[]; _cloudGrid=new Set();
-  try { if(trackName){ localStorage.removeItem(TRACK_KEY+_trackSlug(trackName));
-                       localStorage.removeItem(CLOUD_KEY+_trackSlug(trackName)); } } catch(e){}
+  trackBins={};
+  try { if(trackName) localStorage.removeItem(RIBBON_KEY+_trackSlug(trackName)); } catch(e){}
   renderMap();
 }
 function renderMap(){
   const el = $('mapBody'); if(!el) return;
   const cars = (state.rivals||[]).filter(r=> r && Array.isArray(r.pos_xz) && r.pos_xz[0]!=null);
-  const outline = (trackOutline && trackOutline.length>20) ? trackOutline : null;
-  const live = (!outline && trackTrail.length>6) ? trackTrail : null;   // show our partial lap pre-outline
+  const ribbon = buildRibbon();                  // ordered centreline from lap-distance bins
+  const haveTrack = ribbon.length >= 16;
   if($('mapCars')){
-    const prog = outline ? ' · lap saved' : (trackCloud.length ? ' · mapping '+trackCloud.length+'pt' : '');
+    const need = Math.max(1, Math.round((trackLen||5000)/BIN_STEP));
+    const prog = haveTrack ? ' · track mapped' : (ribbon.length ? ' · mapping '+ribbon.length+'/'+need : '');
     const label = (trackName ? trackName : (cars.length?'unknown track':'no feed'))
       + (cars.length ? ' · '+cars.length+' cars' : '') + prog;
     $('mapCars').textContent = label;
   }
-  // bounds from the stable circuit geometry (cloud + outline), so dots don't make the
-  // view jump around; fall back to whatever points exist early on.
-  const geo = (outline||[]).concat(trackCloud).concat(live||[]);
-  const bpts = geo.length>4 ? geo : cars.map(c=>c.pos_xz);
+  // bounds from the circuit geometry (stable), falling back to car dots early on
+  const geo = haveTrack ? ribbon : ribbon.concat(cars.map(c=>c.pos_xz));
+  const bpts = geo.length>2 ? geo : cars.map(c=>c.pos_xz);
   if(bpts.length<2){
-    el.innerHTML = '<p class="note">No position data yet. Drive — the circuit fills in from every car on track, and your racing line is saved after the first full lap (kept per track for next time).</p>';
+    el.innerHTML = '<p class="note">No position data yet. Once cars are on track the circuit is drawn from each car\'s distance along the lap — the whole field maps it in a lap or two — and saved per track.</p>';
     return;
   }
   let minX=Infinity,maxX=-Infinity,minZ=Infinity,maxZ=-Infinity;
@@ -1780,20 +1739,14 @@ function renderMap(){
   const VW=680, VH=Math.max(240, Math.min(560, Math.round(VW*RH/RW)));
   const sx=x=> ((x-minX)/RW*VW);
   const sy=z=> (VH-(z-minZ)/RH*VH);        // invert Z so north is up
-  // Circuit rendering. Once we have a driven lap, smooth it into a closed track ribbon
-  // (dark road under a light centreline) — a real-looking map, no scribble. Until then,
-  // show the point-cloud faintly as a "mapping…" placeholder plus our partial lap.
-  let cloudEls = '', roadPath = '';
-  if(outline){
-    const d = _smoothPath(_downsample(outline, 220), sx, sy, true);
+  // Circuit: the ordered centreline, smoothed into a closed ribbon (dark road under a
+  // light centre line) — a real-looking track. Dashed + thin while still filling in.
+  let roadPath = '';
+  if(haveTrack){
+    const d = _smoothPath(_downsample(ribbon, 180), sx, sy, true);
     roadPath = `<path d="${d}" class="trk-road"/><path d="${d}" class="trk-path"/>`;
-  } else {
-    if(trackCloud.length){
-      cloudEls = '<g class="trk-cloud">'+trackCloud.map(p=>`<circle cx="${sx(p[0]).toFixed(1)}" cy="${sy(p[1]).toFixed(1)}" r="1.6"/>`).join('')+'</g>';
-    }
-    if(live && live.length>1){
-      roadPath = `<path d="${_smoothPath(_downsample(live,160), sx, sy, false)}" class="trk-path building"/>`;
-    }
+  } else if(ribbon.length>2){
+    roadPath = `<path d="${_smoothPath(ribbon, sx, sy, true)}" class="trk-path building"/>`;
   }
   const dots = cars.map(c=>{
     const x=c.pos_xz[0], z=c.pos_xz[1], cx=sx(x).toFixed(1), cy=sy(z).toFixed(1);
@@ -1812,7 +1765,7 @@ function renderMap(){
   }).join('') + `<span class="trk-lg"><i class="us-dot"></i>us (white ring)</span>`;
   el.innerHTML =
     `<svg class="trkmap" viewBox="0 0 ${VW} ${VH}" preserveAspectRatio="xMidYMid meet">`+
-      `<rect x="0" y="0" width="${VW}" height="${VH}" class="trk-bg"/>${cloudEls}${roadPath}${dots}</svg>`+
+      `<rect x="0" y="0" width="${VW}" height="${VH}" class="trk-bg"/>${roadPath}${dots}</svg>`+
     `<div class="trk-legend">${legend}</div>`;
 }
 
@@ -2364,8 +2317,7 @@ function resetSessionData(){
   _curDriverName = null; _driverSeatStartEl = null;
   _stintStartLap = null; _stintStartEl = null; _lastLoggedLap = state.laps_done||0;
   _tempLog = []; try{ localStorage.removeItem(LIVE_KEY); }catch(e){}
-  trackTrail = []; _lastTrailPt = null; _lastMapLap = state.laps_done||0;
-  // keep the saved per-track outline (circuit geometry survives a new session)
+  // keep the per-track ribbon (circuit geometry survives a new session)
   if(typeof render==='function') render();
 }
 function confirmResetSession(){

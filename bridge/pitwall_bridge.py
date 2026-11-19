@@ -316,6 +316,8 @@ def read_state(info):
             rivals.append({
                 "pos": g(v, "mPlace"),
                 "pos_xz": _xz(g(v, "mPos")),          # world ground-plane position (track map)
+                "lap_dist": (round(float(g(v, "mLapDist")), 1)   # metres along the lap (orders the map)
+                             if g(v, "mLapDist") is not None else None),
                 "name": name or driver,
                 "num": num,
                 "manuf": manuf,
@@ -399,6 +401,8 @@ def read_state(info):
         "track_temp": track_temp,
         "air_temp": air_temp,
         "track_name": track_name,
+        "track_len": (round(float(g(si, "mLapDist")), 1)   # full lap length (metres) for the map
+                      if g(si, "mLapDist") is not None else None),
         "session_remaining_s": session_remaining,
         "sectors": sectors,
         "rivals": rivals or None,
@@ -466,6 +470,7 @@ def demo_state(tick):
         "track_temp": round(30 - (6 if wet else 0) + math.sin(tick / 40) * 2, 1),
         "air_temp": round(20 - (3 if wet else 0) + math.sin(tick / 60), 1),
         "track_name": "Monza (demo)",
+        "track_len": 5780.0,
         "sectors": {
             "s1": round((95.0 * (1.12 if wet else 1.0)) * 0.32, 3),
             "s2": round((95.0 * (1.12 if wet else 1.0)) * 0.40, 3),
@@ -477,6 +482,8 @@ def demo_state(tick):
              # fake world position on a wobbly closed loop so the track map self-draws
              "pos_xz": [round(820 * math.cos(tick * 0.10 + p * 0.55) + 120 * math.cos(3 * (tick * 0.10 + p * 0.55)), 1),
                         round(520 * math.sin(tick * 0.10 + p * 0.55) + 80 * math.sin(2 * (tick * 0.10 + p * 0.55)), 1)],
+             # lap distance = angle around that loop -> metres, so the map orders by it
+             "lap_dist": round(((tick * 0.10 + p * 0.55) % (2 * math.pi)) / (2 * math.pi) * 5780, 1),
              "gap_s": 0 if num == "38" else round(p * 3.5, 1),
              "last_lap_s": round((95.0 - (8 if cl == "Hypercar" else 0)) + p * 0.2, 3),
              "best_lap_s": round((95.0 - (8 if cl == "Hypercar" else 0)) - 0.4, 3),
