@@ -786,7 +786,9 @@ tr.splash td{opacity:.72}
 .trkmap{width:100%;height:auto;max-height:min(66vh,calc(100vh - 470px));display:block;border:1px solid var(--line);border-radius:10px;margin-top:10px}
 .trk-bg{fill:#0a0d12}
 .trk-cloud circle{fill:#2b3442}
-.trk-path{fill:none;stroke:#6f8198;stroke-width:3;stroke-linejoin:round;stroke-linecap:round;opacity:.95}
+.trk-road{fill:none;stroke:#39434f;stroke-width:13;stroke-linejoin:round;stroke-linecap:round}
+.trk-path{fill:none;stroke:#aeb9c7;stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round;opacity:.95}
+.trk-path.building{stroke:#6f8198;stroke-width:3;stroke-dasharray:5 6;opacity:.8}
 .trk-num{fill:#cdd5df;font-family:var(--mono);font-size:10px;font-weight:700}
 .trk-num.us{fill:#ff6a60}
 .trk-legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:8px}
