@@ -7,16 +7,18 @@ window.RACE_CONFIG = {
   n_drivers: 4,
   // Francisco starts (index 0). Rui & Helder must never take stint 1.
   driver_names: ["Francisco Coelho", "Diogo Rodrigues", "Rui Garcia", "Helder Marques"],
-  // DEFAULT rotation: ENDURANCE / FEWER-SWAPS. VE forces a fuel splash every ~24
-  // laps (8 stints), but the driver only changes every SECOND stop — each driver
-  // runs a continuous ~90-min block (2 fuel stints, ~48 laps) and just splashes
-  // fuel in between without getting out. Driver changes: 3 (not 7).
-  // Blocks: Francisco (start) | Rui | Helder | Diogo (flag). Experienced bookend
-  // the risky start + finish; the newer pair get the calm middle. Rui/Helder never
-  // start. Each driver gets one long stint, ~equal seat time.
-  // (Pairs line up with the tyre new/stay pattern, so tyres change only on swaps.)
-  driver_sequence: ["Francisco Coelho", "Francisco Coelho", "Rui Garcia", "Rui Garcia",
-                    "Helder Marques", "Helder Marques", "Diogo Rodrigues", "Diogo Rodrigues"],
+  // DEFAULT rotation: MAX-SWAP / ZERO-EXTRA-PIT-TIME. VE forces a refuel stop every
+  // ~24 laps (8 stints / 7 stops) whether we swap or not — the car is already
+  // stationary for that refuel. So we put a DRIVER CHANGE on EVERY forced stop:
+  // the swap runs concurrent with the refuel, costing ~0 extra green-flag time
+  // (we never add an extra stop just to swap). Net pit loss = same as fewer-swaps,
+  // but 7 swaps instead of 3. Each driver does TWO ~24-lap turns (~45 min each,
+  // ~90 min total) = equal seat time, each turn well under the 80-min cap.
+  // Sequence F·R·D·H·R·F·H·D: Francisco starts (forced), Diogo takes the flag —
+  // experienced pair bookend the risky start + finish; Rui/Helder spread through
+  // the calm middle and never start. No back-to-back same driver = swap every stop.
+  driver_sequence: ["Francisco Coelho", "Rui Garcia", "Diogo Rodrigues", "Helder Marques",
+                    "Rui Garcia", "Francisco Coelho", "Helder Marques", "Diogo Rodrigues"],
   cannot_start: ["Rui Garcia", "Helder Marques"],
 
   // --- car / pace :: MONZA · BMW M4 LMGT3 (real-data baseline) ---
@@ -26,9 +28,9 @@ window.RACE_CONFIG = {
   // the real limiter is laps-per-100%-VE ≈ 24 at Monza, captured by max_stint_laps.
   // Refine each from the car's MFD (Fuel L/lap + VE %/lap) after a few laps — the
   // live bridge also overwrites these with real telemetry once running.
-  avg_lap_s: 112,              // Monza GT3 race avg (1:52) — conservative for mixed drivers + traffic
-  fuel_per_lap: 2.8,           // Monza GT3 ~2.8 L/lap (MFD confirms; tank is NOT the limiter here)
-  tank_cap: 120,              // LMGT3 class tank — physical max; VE caps the stint well before this
+  avg_lap_s: 112,              // MEASURED Monza avg 111.6 (best 1:50.5); held at 112 for traffic/mixed drivers
+  fuel_per_lap: 3.35,          // MEASURED over 12 clean laps (84L tank / 3.35 = ~25-lap stint = VE window)
+  tank_cap: 84,               // MEASURED car tank — fuel window (~25 laps) now matches the VE window
   fuel_margin_laps: 1,         // keep this many laps of fuel as safety
   // VE pit-window cap: LMGT3 at Monza runs out of Virtual Energy at ~24 laps, so
   // pit there (exceeding 100% VE = 100s stop-go penalty). This also makes 8 even
@@ -47,7 +49,9 @@ window.RACE_CONFIG = {
   },
 
   // --- pit ---
-  pit_loss_s: 60,              // Monza: pit-lane delta + ~42s VE refuel/service (refine on day)
+  pit_loss_s: 60,              // ESTIMATE — NOT yet measured (both capture attempts failed). Monza
+                               // pit-lane delta + VE refuel/service. Measure before the race: one
+                               // out-lap + flying lap + clean drive-through (no service).
   // pit WINDOW band around the ideal stop lap (shown on the board as e.g. L18–22).
   // early = how many laps sooner you can box (wastes a little energy); late = how
   // far you can stretch toward the limit (eats the safety margin).
@@ -93,7 +97,7 @@ window.RACE_CONFIG = {
   // are reference values for Monza.
   energy_mode: "ve",           // LMGT3 runs to a Virtual Energy allowance
   ve_max: 100,                 // Virtual Energy budget (%)
-  ve_per_lap: 4.2,             // ~100% / 24 laps at Monza — validate on MFD
+  ve_per_lap: 4.0,             // MEASURED ~4.0%/lap → 100/4 = 25-lap VE window (cap held at 24, 1-lap margin)
 
   // --- damage / repair ---  LMU reports Aero/Body/Susp/Tyres % + a repair-time estimate
   damage: {

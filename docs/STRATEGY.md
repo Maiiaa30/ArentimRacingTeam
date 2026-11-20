@@ -1,7 +1,9 @@
 # Race Strategy — Arentim Racing Team · 6h Monza · BMW M4 LMGT3
 
 > Default plan for discussion. Not final — team to review and agree.
-> Status: **DEFAULT (provisional)** as of 2026-11-11. Owner likes it; pending team sign-off.
+> Status: **DEFAULT (provisional)** — reworked 2026-11-20 to MAX-SWAP after a
+> real race-conditions practice run. Owner wants more driver changes without
+> losing pit time; pending team sign-off.
 
 ## The car & race (facts we're planning around)
 - **Car:** BMW M4 LMGT3 (#38), ~99% confirmed.
@@ -14,45 +16,64 @@
   plan held in reserve (2 tyre sets kept back... see below).
 
 ## The one fact that drives everything
-**LMU LMGT3 is governed by Virtual Energy (VE), not the fuel tank.** The 120 L
-class tank holds far more than one stint needs — you are forced to pit when VE
-hits 0%, which at Monza is **~24 laps**. Going over 100% VE in a stint = **100s
-stop-go penalty**. So ~7 refuel stops over 6h are unavoidable. This is physics,
-not a strategy choice.
+**LMU LMGT3 is governed by Virtual Energy (VE), not the fuel tank.** You are
+forced to pit when VE hits 0%, which at Monza we **measured at ~25 laps** (VE
+drain ~4.0 %/lap). Going over 100% VE in a stint = **100s stop-go penalty**. So
+**7 refuel stops over 6h are unavoidable** — this is physics, not a strategy
+choice. Fuel and VE now line up: the ~84 L we carry burns at **3.35 L/lap →
+~25 laps**, the same window as VE, so neither one is the lone limiter.
 
-## DEFAULT PLAN — "Endurance / fewer-swaps"
-Chosen because the owner wants long stints and few driver changes.
+## The insight behind this rework — swaps are FREE on a forced stop
+The 7 VE stops happen whether we change driver or not; the car is already
+stationary for the refuel. So we put a **driver swap on EVERY one of those forced
+stops** — the swap runs concurrent with the refuel and costs **~0 extra
+green-flag time**. We lose pit time only if we add an *extra* stop just to swap,
+which we never do. Result: **same 7 stops as a fewer-swaps plan, but 7 swaps
+instead of 3** — more wheel-time variety at no time cost.
+(Caveat: confirm the LMU swap animation isn't longer than the refuel; if it is,
+the overflow is the only cost — still tiny.)
 
-- **8 stints** (VE forces a fuel splash every ~24 laps)
+## DEFAULT PLAN — "Max-swap / zero-extra-pit-time"
+Chosen because the owner wants more driver changes without losing pit time.
+
+- **8 stints** (VE forces a refuel every ~24 laps — cap held at 24, 1-lap margin)
 - **7 pit stops** (every stint boundary — can't avoid, VE)
-- **3 driver changes** (driver swaps only every *second* stop)
-- **4 tyre sets used, 1 reserve** (tyres changed only on the 3 swaps + start)
-- **~188 laps**, finish ~5:57
+- **7 driver changes** (swap on *every* stop — free, see above)
+- **4 tyre sets used, 1 reserve** (tyres only double-stinted — deg is tiny, see below)
+- **~190 laps** (measured pace 111.6s), finish ~5:58
 
-### Rotation (driver blocks)
-Each driver runs a continuous **~90-min block = 2 fuel stints (~48 laps)**, just
-splashing fuel in the middle without getting out.
+### Rotation (each driver TWO ~24-lap turns)
+`Francisco · Rui · Diogo · Helder · Rui · Francisco · Helder · Diogo`
 
-| Block | Driver | Stints | Laps | Notes |
-|-------|--------|--------|------|-------|
-| 1 | **Francisco** | 1–2 | ~48 | STARTS (cold tyres, race-start chaos) |
-| 2 | **Rui** | 3–4 | ~48 | calm middle |
-| 3 | **Helder** | 5–6 | ~48 | calm middle |
-| 4 | **Diogo** | 7–8 | ~44 | takes the FLAG (traffic finish) |
+| Stint | Driver | Laps | Notes |
+|-------|--------|------|-------|
+| 1 | **Francisco** | ~24 | STARTS (cold tyres, race-start chaos) |
+| 2 | **Rui** | ~24 | |
+| 3 | **Diogo** | ~24 | |
+| 4 | **Helder** | ~24 | |
+| 5 | **Rui** | ~24 | |
+| 6 | **Francisco** | ~24 | |
+| 7 | **Helder** | ~24 | |
+| 8 | **Diogo** | ~22 | takes the FLAG (traffic finish) |
 
-- Experienced drivers (Francisco, Diogo) bookend the two riskiest phases
-  (start + finish); the newer pair get the calm middle.
-- Seat time ≈ equal: Francisco 92m · Rui 92m · Helder 92m · Diogo 83m
-  (Diogo's block is the short time-remainder).
-- Tyres: MED throughout. Monza = low deg; BMW M4 wear "balanced/improved"
-  (outer-rear worst). Each set double-stints 48 laps (< ~70 life) comfortably.
+- Experienced drivers (Francisco, Diogo) bookend start + finish; Rui/Helder
+  never start and are spread through the calmer middle.
+- **No back-to-back same driver** → a swap every stop.
+- Seat time equal: each driver **two ~45-min turns ≈ ~90 min total**, every
+  single turn ~45 min — well under the 80-min *consecutive* cap.
+- Tyres: MED throughout. **Measured deg ~0.8 %/lap** (left/rear heaviest) — a set
+  loses only ~38% over a double-stint (48 laps), so rubber is never the limiter.
+  Change tyres every *second* stop (4 sets), not every stop — saves a little
+  service time where the swap+refuel is the long pole.
 
 ## Alternatives considered (for the team chat)
 
-### A. Equal-swap ("classic")
-Same 8 stints but swap driver **every** stop. Each driver 2 separate ~45-min
-stints spread across the race. More wheel time variety, but **7 driver changes**
-(more swap risk/time). Rejected in favour of fewer swaps — easy to switch back.
+### A. Endurance / fewer-swaps (the old default)
+Same 8 stints, but swap driver only every *second* stop (**3 changes**). Each
+driver runs a continuous ~90-min block (2 fuel stints ≈ 48 laps), splashing fuel
+mid-block without getting out. Fewer swaps = marginally less swap risk, but the
+pit-time saving is **~0** (the stops happen anyway) — so the only real difference
+is less wheel-time variety. One-line revert: restore the paired `driver_sequence`.
 
 ### B. Fewest-stops (lift & coast)
 Aggressive VE-saving (lift-and-coast, fuel mix) can stretch a stint ~1 lap. Over
@@ -63,19 +84,20 @@ workload. Not worth it for a fun run. Available as a one-click variant if wanted
 6 long stints, uneven driver split (2/2/1/1). Fewest stops of the dry options,
 but someone sits out — rejected (everyone wants to drive).
 
-## To confirm on race day (turns assumptions into real numbers)
-All current numbers are **baselines**; the live bridge reads real telemetry and
-the plan self-corrects. Before the race, do one **10+ lap** practice run and read
-off the in-game **MFD fuel page**:
-1. **Fuel (L/lap)** and **VE (%/lap)** → sets true stint length (the ~24 anchor).
-   The board now **measures both live** from the lap stream and shows them in the
-   fuel tile (`VE 51% (4.5%/lap)`), so you can read the real VE drain off the
-   dashboard without the MFD and confirm it's near the 4.2 %/lap assumption.
-2. **Lap time** race pace (we assumed 1:52 / 112s).
-3. **Pit loss** (pit-lane delta + full service) — we assumed 60s.
-4. **Tyre drop-off** over a long run — watch outer-rear. If it falls off before
-   ~48 laps, switch to single-stint tyres (needs more sets — we only have 5, so
-   that means fewer stints or accepting the drop).
+## Measured vs still-to-confirm
+A **race-conditions practice run (12 clean laps, 2026-11-20)** nailed down most
+numbers. The live bridge keeps reading real telemetry and the plan self-corrects.
+Status of each input:
+1. ✅ **Fuel 3.35 L/lap** and **VE ~4.0 %/lap** (→ ~25-lap window, cap at 24).
+   The board also measures both live and shows them in the fuel tile.
+2. ✅ **Lap time ~111.6s** avg (best 1:50.5); held at 112 for traffic/mixed drivers.
+3. ⚠️ **Pit loss — STILL UNMEASURED.** Both capture attempts failed (timing
+   missed the pit entry; the one stop was a full-service stop, not a clean
+   drive-through). Config holds the **60s estimate**. **MEASURE BEFORE THE RACE:**
+   one out-lap + one flying lap + a clean **drive-through** (no service) — the
+   green-lap vs pit-lap delta is the pit-lane loss.
+4. ✅ **Tyre drop-off ~0.8 %/lap**, left/rear heaviest, no cliff over 12 laps —
+   comfortably double-stints 48 laps. Watch it holds over a true long run.
 5. **Pit-stop rules** — any mandatory stops / min or **max** drive time per
    driver in the event rules? The board now tracks continuous seat time per
    driver and warns at `driver_max_consecutive_min` (default 80m) — set it to the
@@ -89,11 +111,12 @@ Set the real values in the dashboard **Setup** panel; the live plan updates. The
 - `max_stint_laps: 24` — the VE pit window (the real stint limiter). The live
   "Pit in" count is the more-restrictive of fuel and VE, driven by the measured
   VE %/lap when the game feeds live VE — so it tracks the real car, not the tank.
-- `ve_per_lap: 4.2` — VE drain assumption (%/lap); the board overrides it with the
-  live measured rate once a couple of laps are logged.
-- `driver_sequence` — the block rotation above (each driver listed twice in a row).
-- `avg_lap_s 112`, `fuel_per_lap 2.8`, `tank_cap 120`, `pit_loss_s 60` — Monza
-  BMW M4 baselines.
+- `ve_per_lap: 4.0` — MEASURED VE drain (%/lap); the board overrides it with the
+  live rate once a couple of laps are logged.
+- `driver_sequence` — the max-swap rotation above (no two adjacent the same = a
+  swap every stop). To revert to fewer-swaps, pair each name (two in a row).
+- `avg_lap_s 112`, `fuel_per_lap 3.35`, `tank_cap 84` — MEASURED. `pit_loss_s 60`
+  — still an ESTIMATE (measure the drive-through before the race).
 - `tire_reserve_sets: 1` — hold 1 set back for wet/damage.
 - `pit_window_early/late: 2` — the ±laps band drawn around the ideal stop lap.
 - `driver_max_consecutive_min: 80`, `driver_max_total_min: null` — seat-time reg

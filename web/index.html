@@ -17,7 +17,7 @@
   <span class="chip wet" id="wx">DRY</span>
   <span class="chip wetpct" id="wxDetail" title="track wetness + trend" style="display:none"></span>
   <span class="chip tgt" id="target">fewest stops</span>
-  <button class="chip btn" onclick="openSetup()" title="Race setup — enter real values">⚙ Setup</button>
+  <button class="chip btn" onclick="openLineup()" title="Driver line-up — reassign who drives each stint">👤 Line-up</button>
 </header>
 
 <div class="wrap">
@@ -247,16 +247,17 @@
   </div>
 </div>
 
-<!-- setup / config modal -->
-<div class="modal-bg" id="setupModal">
+<!-- driver line-up modal -->
+<div class="modal-bg" id="lineupModal">
   <div class="modal wide">
-    <button class="x" onclick="closeSetup()">✕</button>
-    <h2>Race setup</h2>
-    <p class="note" style="margin-top:0">Enter real values from practice. Saved in this browser; the plan regenerates on save.</p>
-    <div id="setupBody" class="setup-grid"></div>
+    <button class="x" onclick="closeLineup()">✕</button>
+    <h2>Driver line-up</h2>
+    <p class="note" style="margin-top:0">A driver can't make it? Reassign any stint to whoever covers it, then regenerate the plan. Stint 1 can't go to a driver who isn't allowed to start.</p>
+    <div id="lineupBody" class="setup-grid"></div>
+    <p id="lineupWarn" class="note" style="color:var(--bad);display:none"></p>
     <div class="btns" style="margin-top:16px">
-      <button class="go" onclick="saveSetup()">Save &amp; regenerate</button>
-      <button onclick="resetSetup()">Reset to defaults</button>
+      <button class="go" onclick="applyLineup()">Apply &amp; regenerate</button>
+      <button onclick="resetLineup()">Reset to default rotation</button>
     </div>
   </div>
 </div>
@@ -2050,70 +2051,69 @@ function renderDrivers(){
 function openDrivers(){ renderDrivers(); $('drvModal').classList.add('open'); }
 function closeDrivers(){ $('drvModal').classList.remove('open'); }
 
-// ---- race setup panel (edit config from the UI, persist to localStorage) ----
+// shared HTML-escaper (used across the board, keep it here)
 const _esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-function renderSetup(){
-  const tl = cfg.tire_life_laps;
-  const dn = (cfg.driver_names && cfg.driver_names.length) ? cfg.driver_names : window.DRIVERS;
-  const num = (id,val,step)=>`<label>${id.label}<input type="number" id="su_${id.k}" value="${val}" step="${step||'any'}"></label>`;
-  $('setupBody').innerHTML =
-    num({k:'duration_h',label:'Race length (h)'}, (cfg.duration_s/3600), 0.5) +
-    num({k:'avg_lap_s',label:'Avg lap (s)'}, cfg.avg_lap_s, 0.1) +
-    num({k:'fuel_per_lap',label:'Fuel / lap (L)'}, cfg.fuel_per_lap, 0.1) +
-    num({k:'tank_cap',label:'Tank (L)'}, cfg.tank_cap, 1) +
-    num({k:'fuel_margin_laps',label:'Fuel margin (laps)'}, cfg.fuel_margin_laps, 1) +
-    num({k:'tire_budget',label:'Tyre budget'}, cfg.tire_budget, 1) +
-    num({k:'pit_loss_s',label:'Pit loss (s)'}, cfg.pit_loss_s, 1) +
-    num({k:'wet_lap_factor',label:'Wet lap factor'}, cfg.wet_lap_factor, 0.01) +
-    num({k:'tl_soft',label:'Tyre life — soft'}, tl.soft, 1) +
-    num({k:'tl_med',label:'Tyre life — med'}, tl.med, 1) +
-    num({k:'tl_hard',label:'Tyre life — hard'}, tl.hard, 1) +
-    num({k:'tl_wet',label:'Tyre life — wet'}, tl.wet, 1) +
-    `<label>Optimize<select id="su_optimize_target">`+
-      ['fewest_stops','fastest','safest'].map(o=>`<option ${cfg.optimize_target===o?'selected':''}>${o}</option>`).join('')+
-    `</select></label>`+
-    `<label>Access passcode<input type="text" id="su_access" value="${_esc(cfg.access_passcode||'')}"></label>`+
-    dn.map((n,i)=>`<label>Driver ${i+1}<input type="text" id="su_drv${i}" value="${_esc(n)}"></label>`).join('');
-}
-function saveSetup(){
-  const g = id => $('su_'+id);
-  // build names from however many driver inputs renderSetup emitted (not a fixed 4)
-  const names = [];
-  for(let i=0; g('drv'+i); i++) names.push(g('drv'+i).value.trim() || ('D'+(i+1)));
-  if(!names.length) names.push('D1');
-  // a value that must be strictly positive — a 0 or blank here divides by zero in
-  // the engine (and can spin the stint loop), so fall back to the current config.
-  const pos = (id,fallback)=>{ const v=+g(id).value; return (isFinite(v)&&v>0)?v:fallback; };
-  const nonneg = (id,fallback)=>{ const v=+g(id).value; return (isFinite(v)&&v>=0)?v:fallback; };
-  const ov = {
-    duration_s: Math.round(pos('duration_h', cfg.duration_s/3600) * 3600),
-    avg_lap_s: pos('avg_lap_s', cfg.avg_lap_s), fuel_per_lap: pos('fuel_per_lap', cfg.fuel_per_lap),
-    tank_cap: pos('tank_cap', cfg.tank_cap), fuel_margin_laps: nonneg('fuel_margin_laps', cfg.fuel_margin_laps),
-    tire_budget: pos('tire_budget', cfg.tire_budget), pit_loss_s: nonneg('pit_loss_s', cfg.pit_loss_s),
-    wet_lap_factor: pos('wet_lap_factor', cfg.wet_lap_factor),
-    tire_life_laps: { soft:pos('tl_soft',cfg.tire_life_laps.soft), med:pos('tl_med',cfg.tire_life_laps.med), hard:pos('tl_hard',cfg.tire_life_laps.hard), wet:pos('tl_wet',cfg.tire_life_laps.wet) },
-    optimize_target: g('optimize_target').value,
-    access_passcode: g('access').value,
-    driver_names: names
-  };
+
+// ---- driver line-up panel (reassign who drives each stint, persist to localStorage) ----
+// A driver drops out? Reassign any stint to whoever covers it, then regenerate.
+// The only hard rule: stint 1 can't go to a driver who isn't allowed to start
+// (cannot_start). Everything else is free — "it is what it is".
+function _saveOverride(patch){
+  let ov = {};
+  try { ov = JSON.parse(localStorage.getItem(window.CONFIG_KEY) || '{}') || {}; } catch(e){}
+  Object.assign(ov, patch);
   try { localStorage.setItem(window.CONFIG_KEY, JSON.stringify(ov)); } catch(e){}
-  // apply live (no reload needed, except the access gate which runs at load)
-  Object.assign(cfg.tire_life_laps, ov.tire_life_laps);
-  Object.keys(ov).forEach(k => { if(k!=='tire_life_laps' && k!=='driver_names') cfg[k] = ov[k]; });
-  cfg.driver_names = names.slice(); window.DRIVERS = names.slice();
-  $('target').textContent = cfg.optimize_target.replace('_',' ');
+}
+function _roster(){ return (cfg.driver_names && cfg.driver_names.length) ? cfg.driver_names : window.DRIVERS; }
+function _rotation(){
+  const r = _roster();
+  return (cfg.driver_sequence && cfg.driver_sequence.length) ? cfg.driver_sequence : r;
+}
+function renderLineup(){
+  const roster = _roster();
+  const seq = _rotation();
+  const cantStart = cfg.cannot_start || [];
+  $('lineupBody').innerHTML = seq.map((nm,i)=>{
+    // if the stint's current driver isn't in the roster, keep them as an option
+    const extra = roster.indexOf(nm) < 0 ? `<option selected>${_esc(nm)}</option>` : '';
+    const opts = roster.map(d=>{
+      const dis = (i===0 && cantStart.indexOf(d) >= 0) ? ' disabled' : '';
+      const sel = (d===nm) ? ' selected' : '';
+      return `<option${sel}${dis}>${_esc(d)}</option>`;
+    }).join('');
+    return `<label>Stint ${i+1}${i===0?' · START':''}<select id="lu_${i}">${extra}${opts}</select></label>`;
+  }).join('');
+  $('lineupWarn').style.display = 'none';
+}
+function applyLineup(){
+  const seq = [];
+  for(let i=0; $('lu_'+i); i++) seq.push($('lu_'+i).value);
+  const warn = $('lineupWarn');
+  const cantStart = cfg.cannot_start || [];
+  if(seq.length && cantStart.indexOf(seq[0]) >= 0){
+    warn.textContent = seq[0] + ' is not allowed to start — pick a different driver for stint 1.';
+    warn.style.display = 'block';
+    return;
+  }
+  warn.style.display = 'none';
+  cfg.driver_sequence = seq.slice();
+  _saveOverride({ driver_sequence: seq.slice() });
   currentPlan = Engine.generatePlan(cfg, wx);
-  _brainSig = null;   // setup changed the config — force a fresh brain
+  _brainSig = null;   // line-up changed — force a fresh brain
   render();
-  closeSetup();
+  closeLineup();
 }
-function resetSetup(){
-  if(!confirm('Reset all race settings to defaults?')) return;
-  try { localStorage.removeItem(window.CONFIG_KEY); } catch(e){}
-  location.reload();
+function resetLineup(){
+  const base = (window.RACE_CONFIG_BASE.driver_sequence || []).slice();
+  cfg.driver_sequence = base.slice();
+  _saveOverride({ driver_sequence: base.slice() });
+  currentPlan = Engine.generatePlan(cfg, wx);
+  _brainSig = null;
+  render();
+  renderLineup();
 }
-function openSetup(){ renderSetup(); $('setupModal').classList.add('open'); }
-function closeSetup(){ $('setupModal').classList.remove('open'); }
+function openLineup(){ renderLineup(); $('lineupModal').classList.add('open'); }
+function closeLineup(){ $('lineupModal').classList.remove('open'); }
 
 // ---- race timeline (stint Gantt + weather band + now marker) ----
 function renderTimeline(){
